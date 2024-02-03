@@ -1,0 +1,21 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Project ToolsVersion="Current" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
+    <DebuggerFlavor>WindowsRemoteDebugger</DebuggerFlavor>
+    <RemoteDebuggerCommand>dwm.exe</RemoteDebuggerCommand>
+    <RemoteDebuggerWorkingDirectory>C:\AcrylicEverywhere</RemoteDebuggerWorkingDirectory>
+    <RemoteDebuggerDebuggerType>NativeOnly</RemoteDebuggerDebuggerType>
+    <RemoteDebuggerConnection>RemoteWithoutAuthentication</RemoteDebuggerConnection>
+    <RemoteDebuggerServerName>192.168.209.134:4026</RemoteDebuggerServerName>
+    <RemoteDebuggerAttach>true</RemoteDebuggerAttach>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
+    <DebuggerFlavor>WindowsRemoteDebugger</DebuggerFlavor>
+    <RemoteDebuggerCommand>dwm.exe</RemoteDebuggerCommand>
+    <RemoteDebuggerWorkingDirectory>C:\AcrylicEverywhere</RemoteDebuggerWorkingDirectory>
+    <RemoteDebuggerDebuggerType>NativeOnly</RemoteDebuggerDebuggerType>
+    <RemoteDebuggerConnection>RemoteWithoutAuthentication</RemoteDebuggerConnection>
+    <RemoteDebuggerServerName>192.168.209.134:4026</RemoteDebuggerServerName>
+    <RemoteDebuggerAttach>true</RemoteDebuggerAttach>
+  </PropertyGroup>
+</Project>
