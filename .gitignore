@@ -30,3 +30,14 @@
 *.exe
 *.out
 *.app
+/.vs/AcrylicEverywhere
+/Backup/FullBackup
+/Backup
+/Build/x64/Debug/symbols
+/Build/x64/Release/symbols
+*.exp
+*.pdb
+*.yes
+/Cache/AcrylicEverywhere/x64
+/packages
+/x64/Debug/microsoft/STL
