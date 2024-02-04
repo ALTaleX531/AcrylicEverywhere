@@ -245,7 +245,7 @@ HRESULT STDMETHODCALLTYPE AcrylicEverywhere::MyCTopLevelWindow::UpdateNCAreaBack
 
 	std::shared_ptr<CCompositedBackdrop> backdrop{ nullptr };
 	uDwmPrivates::CWindowData* windowData{ GetWindowData() };
-	if (windowData && !uDwmPrivates::CAccent::s_IsPolicyActive(windowData->GetAccentPolicy()) && HasNonClientBackground() && (backdrop = g_backdropManager.GetOrCreateBackdrop(this, true)))
+	if (windowData && windowData->GetAccentPolicy() && !uDwmPrivates::CAccent::s_IsPolicyActive(windowData->GetAccentPolicy()) && HasNonClientBackground() && (backdrop = g_backdropManager.GetOrCreateBackdrop(this, true)))
 	{
 		if (MyResourceHelper::g_resourceStorage.borderRgn && MyResourceHelper::g_resourceStorage.titlebarRgn)
 		{
@@ -284,14 +284,15 @@ HRESULT STDMETHODCALLTYPE AcrylicEverywhere::MyCTopLevelWindow::UpdateNCAreaBack
 
 HRESULT STDMETHODCALLTYPE AcrylicEverywhere::MyCTopLevelWindow::ValidateVisual()
 {
+	HRESULT hr{ (this->*HookHelper::union_cast<decltype(&MyCTopLevelWindow::ValidateVisual)>(g_CTopLevelWindow_ValidateVisual_Org))() };
 	std::shared_ptr<CCompositedBackdrop> backdrop{ nullptr };
 	CGlassReflectionBackdrop* glassReflection{ nullptr };
 	uDwmPrivates::CWindowData* windowData{ GetWindowData() };
-	if (windowData && !uDwmPrivates::CAccent::s_IsPolicyActive(windowData->GetAccentPolicy()) && (backdrop = g_backdropManager.GetOrCreateBackdrop(this)) && (glassReflection = backdrop->GetGlassReflection()))
+	if (windowData && windowData->GetAccentPolicy() && !uDwmPrivates::CAccent::s_IsPolicyActive(windowData->GetAccentPolicy()) && (backdrop = g_backdropManager.GetOrCreateBackdrop(this)) && (glassReflection = backdrop->GetGlassReflection()))
 	{
 		glassReflection->UpdateBackdrop(this);
 	}
-	return (this->*HookHelper::union_cast<decltype(&MyCTopLevelWindow::ValidateVisual)>(g_CTopLevelWindow_ValidateVisual_Org))();
+	return hr;
 }
 
 void STDMETHODCALLTYPE AcrylicEverywhere::MyCTopLevelWindow::Destructor()

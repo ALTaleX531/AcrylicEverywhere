@@ -846,26 +846,25 @@ HRESULT STDMETHODCALLTYPE CGlassReflectionBackdrop::UpdateBackdrop(uDwmPrivates:
 	MONITORINFO mi{ sizeof(MONITORINFO) };
 	THROW_IF_WIN32_BOOL_FALSE(GetMonitorInfoW(monitor, &mi));
 
+	auto surfaceSize{ s_sharedResources.drawingSurface.SizeInt32() };
 	if (currentMonitor != monitor || !EqualRect(&currentMonitorRect, &mi.rcMonitor))
 	{
-		auto surfaceSize{ s_sharedResources.drawingSurface.SizeInt32() };
 		auto scaleFactor
 		{
 			[&]()
 			{
-				if (
-					static_cast<float>(surfaceSize.Width) / static_cast<float>(surfaceSize.Height) <=
-					static_cast<float>(wil::rect_width(mi.rcMonitor)) / static_cast<float>(wil::rect_height(mi.rcMonitor))
-				)
+				float factor{1.f};
+
+				auto scaledWidth{ static_cast<float>(surfaceSize.Width) * static_cast<float>(wil::rect_height(mi.rcMonitor)) * (1 + parallaxIntensity) / static_cast<float>(surfaceSize.Height) };
+				factor = scaledWidth / static_cast<float>(surfaceSize.Width);
+
+				if (scaledWidth < static_cast<float>(wil::rect_width(mi.rcMonitor)) * (1 + parallaxIntensity))
 				{
-					return static_cast<float>(wil::rect_width(mi.rcMonitor)) / static_cast<float>(surfaceSize.Width);
-				}
-				else
-				{
-					return static_cast<float>(wil::rect_height(mi.rcMonitor)) / static_cast<float>(surfaceSize.Height);
+					scaledWidth = static_cast<float>(wil::rect_width(mi.rcMonitor)) * (1 + parallaxIntensity);
+					factor = scaledWidth / static_cast<float>(surfaceSize.Width);
 				}
 
-				return 1.f;
+				return factor;
 			} ()
 		};
 		glassSurfaceBrush.Scale(
@@ -879,28 +878,23 @@ HRESULT STDMETHODCALLTYPE CGlassReflectionBackdrop::UpdateBackdrop(uDwmPrivates:
 
 		fixedOffset = 
 		{ 
-			(static_cast<float>(wil::rect_width(mi.rcMonitor)) - scaledSize.x) / 2.f,
-			(static_cast<float>(wil::rect_height(mi.rcMonitor)) - scaledSize.y) / 2.f
+			(static_cast<float>(wil::rect_width(mi.rcMonitor)) * (1 + parallaxIntensity) - scaledSize.x) / 2.f,
+			(static_cast<float>(wil::rect_height(mi.rcMonitor)) * (1 + parallaxIntensity) - scaledSize.y) / 2.f
 		};
 		currentMonitor = monitor;
 		currentMonitorRect = mi.rcMonitor;
 	}
 	if ((currentWindowRect.left != windowRect.left) || (currentWindowRect.top != windowRect.top))
 	{
-		relativeOffset.x += static_cast<float>(currentWindowRect.left - windowRect.left);
-		relativeOffset.y += static_cast<float>(currentWindowRect.top - windowRect.top);
-		
 		MARGINS margins{};
 		topLevelWindow->GetBorderMargins(&margins);
 		glassSurfaceBrush.Offset(
 			winrt::Windows::Foundation::Numerics::float2
 			{
-				-static_cast<float>(windowRect.left - mi.rcMonitor.left) - 
-				static_cast<float>(relativeOffset.x * 0.25f) +
+				-static_cast<float>(windowRect.left - mi.rcMonitor.left) * (1 + parallaxIntensity) +
 				static_cast<float>(IsMaximized(hwnd) ? margins.cxLeftWidth : 0) +
 				fixedOffset.x,
-				-static_cast<float>(windowRect.top - mi.rcMonitor.top) - 
-				static_cast<float>(relativeOffset.y * 0.25f) +
+				-static_cast<float>(windowRect.top - mi.rcMonitor.top) * (1 + parallaxIntensity) +
 				static_cast<float>(IsMaximized(hwnd) ? margins.cyTopHeight : 0) +
 				fixedOffset.y	
 			}
@@ -908,6 +902,34 @@ HRESULT STDMETHODCALLTYPE CGlassReflectionBackdrop::UpdateBackdrop(uDwmPrivates:
 
 		currentWindowRect = windowRect;
 	}
+
+	/*MARGINS margins{};
+	topLevelWindow->GetBorderMargins(&margins);
+	WCHAR className[MAX_PATH + 1]{};
+	GetClassNameW(hwnd, className, MAX_PATH);
+	OutputDebugStringW(
+		std::format(
+			L"window: {}, monitor: {}, monitor_rect: [{}, {}, {}, {}], window_rect: [{}, {}, {}, {}], offset: [{}, {}]\n",
+			className,
+			(void*)monitor,
+			mi.rcMonitor.left,
+			mi.rcMonitor.top,
+			mi.rcMonitor.right,
+			mi.rcMonitor.bottom,
+			windowRect.left,
+			windowRect.top,
+			windowRect.right,
+			windowRect.bottom,
+			-static_cast<float>(windowRect.left - mi.rcMonitor.left) -
+			static_cast<float>(relativeOffset.x * 0.25f) +
+			static_cast<float>(IsMaximized(hwnd) ? margins.cxLeftWidth : 0) +
+			fixedOffset.x,
+			-static_cast<float>(windowRect.top - mi.rcMonitor.top) -
+			static_cast<float>(relativeOffset.y * 0.25f) +
+			static_cast<float>(IsMaximized(hwnd) ? margins.cyTopHeight : 0) +
+			fixedOffset.y
+		).c_str()
+	);*/
 
 	return S_OK;
 }
@@ -980,7 +1002,6 @@ CCompositedBackdrop::CCompositedBackdrop(BackdropType type, bool glassReflection
 
 	MARGINS margins{ 0, 0, 0, 0 };
 	m_visual->SetInsetFromParent(&margins);
-	m_visual->SetDirtyChildren();
 }
 
 void CCompositedBackdrop::InitializeVisualTreeClone(CCompositedBackdrop* backdrop)

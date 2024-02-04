@@ -560,14 +560,14 @@ namespace AcrylicEverywhere::uDwmPrivates
 					//visual->Unhide();
 					visual->SetOpacity(1.);
 					visual->SendSetOpacity(1.);
-					visual->ConnectToParent(true);
+					//visual->ConnectToParent(true);
 				}
 				else
 				{
 					//visual->Hide();
 					visual->SetOpacity(0.);
 					visual->SendSetOpacity(0.);
-					visual->ConnectToParent(false);
+					//visual->ConnectToParent(false);
 				}
 			};
 

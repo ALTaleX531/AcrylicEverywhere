@@ -6,7 +6,7 @@
     <RemoteDebuggerWorkingDirectory>C:\AcrylicEverywhere</RemoteDebuggerWorkingDirectory>
     <RemoteDebuggerDebuggerType>NativeOnly</RemoteDebuggerDebuggerType>
     <RemoteDebuggerConnection>RemoteWithoutAuthentication</RemoteDebuggerConnection>
-    <RemoteDebuggerServerName>192.168.209.134:4026</RemoteDebuggerServerName>
+    <RemoteDebuggerServerName>192.168.209.135:4026</RemoteDebuggerServerName>
     <RemoteDebuggerAttach>true</RemoteDebuggerAttach>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
@@ -15,7 +15,7 @@
     <RemoteDebuggerWorkingDirectory>C:\AcrylicEverywhere</RemoteDebuggerWorkingDirectory>
     <RemoteDebuggerDebuggerType>NativeOnly</RemoteDebuggerDebuggerType>
     <RemoteDebuggerConnection>RemoteWithoutAuthentication</RemoteDebuggerConnection>
-    <RemoteDebuggerServerName>192.168.209.134:4026</RemoteDebuggerServerName>
+    <RemoteDebuggerServerName>192.168.209.135:4026</RemoteDebuggerServerName>
     <RemoteDebuggerAttach>true</RemoteDebuggerAttach>
   </PropertyGroup>
 </Project>

@@ -113,7 +113,7 @@ namespace AcrylicEverywhere
 	struct CGlassReflectionBackdrop : CBackdropEffect
 	{
 		static CGlassReflectionResources s_sharedResources;
-		winrt::Windows::Foundation::Numerics::float2 relativeOffset{};
+		static constexpr float parallaxIntensity{ 0.25 };
 		winrt::Windows::Foundation::Numerics::float2 fixedOffset{};
 		RECT currentWindowRect{};
 		RECT currentMonitorRect{};
