@@ -633,7 +633,6 @@ HRESULT STDMETHODCALLTYPE CBackdropEffect::InitializeDCompAndVisual() try
 
 	THROW_IF_FAILED(interopCompositionTarget->SetRoot(dcompVisual.get()));
 	THROW_IF_FAILED(interopDCompDevice->Commit());
-	THROW_IF_FAILED(interopDCompDevice->WaitForCommitCompletion());
 
 	currentBrush = nullptr;
 	if (!udwmVisual)
