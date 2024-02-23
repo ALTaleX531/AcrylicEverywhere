@@ -4,15 +4,34 @@
 #include "SymbolResolver.hpp"
 #include "AcrylicEverywhere.hpp"
 #include "udwmPrivates.hpp"
-#include "BackdropMaterials.hpp"
+#include "VisualManager.hpp"
 
 namespace AcrylicEverywhere
 {
-	LRESULT CALLBACK WndProc(HWND hWnd, UINT uMessage, WPARAM wParam, LPARAM lParam);
 	DWORD WINAPI ThreadProc(PVOID parameter);
 
+	struct MILCMD
+	{
+		HWND GetHwnd() const
+		{
+			return *reinterpret_cast<HWND*>(reinterpret_cast<ULONG_PTR>(this) + 4);
+		}
+		LPCRECT GetRect() const
+		{
+			return reinterpret_cast<LPCRECT>(reinterpret_cast<ULONG_PTR>(this) + 12);
+		}
+	};
+	struct MILCMD_DWM_REDIRECTION_ACCENTBLURRECTUPDATE : MILCMD {};
+	struct MyCWindowList : uDwmPrivates::CWindowList
+	{
+		HRESULT STDMETHODCALLTYPE UpdateAccentBlurRect(const MILCMD_DWM_REDIRECTION_ACCENTBLURRECTUPDATE* milCmd);
+	};
 	struct MyCTopLevelWindow : uDwmPrivates::CTopLevelWindow
 	{
+		HRESULT STDMETHODCALLTYPE OnClipUpdated();
+		HRESULT STDMETHODCALLTYPE OnAccentPolicyUpdated();
+		DWORD STDMETHODCALLTYPE GetWindowColorizationColor(UCHAR flags);
+		DWORD STDMETHODCALLTYPE GetCaptionColor();
 		HRESULT STDMETHODCALLTYPE InitializeVisualTreeClone(CTopLevelWindow* topLevelWindow, UINT cloneOptions);
 		HRESULT STDMETHODCALLTYPE CloneVisualTree(uDwmPrivates::CTopLevelWindow** topLevelWindow, bool a1, bool a2, bool a3);
 		HRESULT STDMETHODCALLTYPE UpdateNCAreaBackground();
@@ -34,6 +53,22 @@ namespace AcrylicEverywhere
 			HRGN hrgn,
 			uDwmPrivates::CRgnGeometryProxy** geometry
 		);
+	};
+	struct MyCAccent : uDwmPrivates::CAccent
+	{
+		HRESULT STDMETHODCALLTYPE ValidateVisual();
+	};
+	struct MyCTopLevelWindow3D : uDwmPrivates::CTopLevelWindow3D
+	{
+		inline static thread_local MyCTopLevelWindow3D* s_window3D{ nullptr };
+		HRESULT STDMETHODCALLTYPE EnsureRenderData();
+	};
+	struct MyCSecondaryWindowRepresentation : uDwmPrivates::CSecondaryWindowRepresentation
+	{
+		uDwmPrivates::CCachedVisualImageProxy* STDMETHODCALLTYPE CreateCVIForAnimation(
+			bool freeze
+		);
+		void STDMETHODCALLTYPE Destructor();
 	};
 	struct MyIWICImagingFactory2 : IWICImagingFactory2
 	{
@@ -57,148 +92,152 @@ namespace AcrylicEverywhere
 		LPRECT lprc,
 		UINT format
 	);
+	PVOID g_CWindowList_UpdateAccentBlurRect_Org{ nullptr };
+	PVOID g_CTopLevelWindow_GetWindowColorizationColor_Org{ nullptr };
+	PVOID g_CTopLevelWindow_GetCaptionColor_Org{ nullptr };
+	PVOID g_CTopLevelWindow_OnClipUpdated_Org{ nullptr };
+	PVOID g_CTopLevelWindow_OnAccentPolicyUpdated_Org{ nullptr };
 	PVOID g_CTopLevelWindow_Destructor_Org{ nullptr };
 	PVOID g_CTopLevelWindow_InitializeVisualTreeClone_Org{ nullptr };
 	PVOID g_CTopLevelWindow_CloneVisualTree_Org{ nullptr };
 	PVOID g_CTopLevelWindow_UpdateNCAreaBackground_Org{ nullptr };
 	PVOID g_CTopLevelWindow_ValidateVisual_Org{ nullptr };
+
+	PVOID g_CTopLevelWindow3D_EnsureRenderData_Org{ nullptr };
+	PVOID g_CSecondaryWindowRepresentation_CreateCVIForAnimation_Org{ nullptr };
+	PVOID g_CSecondaryWindowRepresentation_Destructor_Org{ nullptr };
+
 	PVOID g_ResourceHelper_CreateGeometryFromHRGN_Org{ nullptr };
-	PVOID g_CGlassColorizationParameters_AdjustWindowColorization_Org{ nullptr };
 	PVOID g_IWICImagingFactory2_CreateBitmapFromHBITMAP_Org{ nullptr };
 	PVOID g_FillRect_Org{ nullptr };
 	PVOID g_DrawTextW_Org{ nullptr };
 
-	class CBackdropManager
-	{
-	public:
-		std::shared_ptr<CCompositedBackdrop> GetOrCreateBackdrop(uDwmPrivates::CTopLevelWindow* topLevelWindow, bool createIfNecessary = false);
-		std::shared_ptr<CCompositedBackdrop> CreateWithGivenBackdrop(uDwmPrivates::CTopLevelWindow* topLevelWindow, std::shared_ptr<CCompositedBackdrop> backdrop);
-		std::shared_ptr<CCompositedBackdrop> Remove(uDwmPrivates::CTopLevelWindow* topLevelWindow);
-		void Shutdown();
-		bool MatchVisualCollection(uDwmPrivates::VisualCollection* visualCollection);
-	private:
-		std::unordered_map<uDwmPrivates::CTopLevelWindow*, std::shared_ptr<CCompositedBackdrop>> m_backdropMap;
-	};
-	CBackdropManager g_backdropManager{};
 	bool g_outOfLoaderLock{ false };
+	CVisualManager g_visualManager;
 }
 
-std::shared_ptr<AcrylicEverywhere::CCompositedBackdrop> AcrylicEverywhere::CBackdropManager::GetOrCreateBackdrop(uDwmPrivates::CTopLevelWindow* topLevelWindow, bool createIfNecessary)
+HRESULT STDMETHODCALLTYPE AcrylicEverywhere::MyCWindowList::UpdateAccentBlurRect(const MILCMD_DWM_REDIRECTION_ACCENTBLURRECTUPDATE* milCmd)
 {
-	auto it{ m_backdropMap.find(topLevelWindow) };
+	HRESULT hr{ S_OK };
 
-	if (createIfNecessary)
+	hr = (this->*HookHelper::union_cast<decltype(&MyCWindowList::UpdateAccentBlurRect)>(g_CWindowList_UpdateAccentBlurRect_Org))(milCmd);
+	
+	auto lock{ wil::EnterCriticalSection(uDwmPrivates::CDesktopManager::s_csDwmInstance) };
+	uDwmPrivates::CWindowData* windowData{ nullptr };
+	uDwmPrivates::CTopLevelWindow* window{ nullptr };
+	winrt::com_ptr<CCompositedAccentBackdrop> backdrop{ nullptr };
+
+	if (
+		SUCCEEDED(hr) &&
+		SUCCEEDED(GetSyncedWindowDataByHwnd(milCmd->GetHwnd(), &windowData)) &&
+		windowData &&
+		(window = windowData->GetWindow()) &&
+		window->GetAccent() &&
+		(backdrop = g_visualManager.GetOrCreateAccentBackdrop(window))
+	)
 	{
-		if (it == m_backdropMap.end())
+		backdrop->UpdateClipRegion();
+	}
+
+	return hr;
+}
+
+HRESULT STDMETHODCALLTYPE AcrylicEverywhere::MyCTopLevelWindow::OnClipUpdated()
+{
+	HRESULT hr{ S_OK };
+
+	hr = (this->*HookHelper::union_cast<decltype(&MyCTopLevelWindow::OnClipUpdated)>(g_CTopLevelWindow_OnClipUpdated_Org))();
+
+	uDwmPrivates::CWindowData* windowData{ GetWindowData() };
+	if (windowData)
+	{
+		winrt::com_ptr<CCompositedAccentBackdrop> backdrop{ nullptr };
+		if (
+			uDwmPrivates::IsAccentBlurEnabled(windowData->GetAccentPolicy()) &&
+			(backdrop = g_visualManager.GetOrCreateAccentBackdrop(this, true))
+		)
 		{
-			auto backdrop{ std::make_shared<CCompositedBackdrop>(BackdropType::Aero, true) };
-			if (backdrop)
-			{
-				auto result{ m_backdropMap.emplace(topLevelWindow, backdrop) };
-				if (result.second == true)
-				{
-					it = result.first;
-					topLevelWindow->ShowNCBackgroundVisuals(false);
-					THROW_IF_FAILED(
-						topLevelWindow->GetVisual()->GetVisualCollection()->InsertRelative(backdrop->GetVisual(), nullptr, true, true)
-					);
-				}
-			}
+			backdrop->UpdateClipRegion();
+		}
+		else if (!uDwmPrivates::IsAccentBlurEnabled(windowData->GetAccentPolicy()))
+		{
+			g_visualManager.RemoveAccent(this);
 		}
 	}
 
-	return it == m_backdropMap.end() ? nullptr : it->second;
+	return hr;
 }
-std::shared_ptr<AcrylicEverywhere::CCompositedBackdrop> AcrylicEverywhere::CBackdropManager::CreateWithGivenBackdrop(uDwmPrivates::CTopLevelWindow* topLevelWindow, std::shared_ptr<CCompositedBackdrop> backdrop)
-{
-	auto it{ m_backdropMap.find(topLevelWindow) };
 
-	if (it == m_backdropMap.end())
+HRESULT STDMETHODCALLTYPE AcrylicEverywhere::MyCTopLevelWindow::OnAccentPolicyUpdated()
+{
+	HRESULT hr{ S_OK };
+
+	hr = (this->*HookHelper::union_cast<decltype(&MyCTopLevelWindow::OnAccentPolicyUpdated)>(g_CTopLevelWindow_OnAccentPolicyUpdated_Org))();
+
+	uDwmPrivates::CWindowData* windowData{ GetWindowData() };
+	if (windowData)
 	{
-		auto result{ m_backdropMap.emplace(topLevelWindow, backdrop) };
-		if (result.second == true)
+		winrt::com_ptr<CCompositedAccentBackdrop> backdrop{ nullptr };
+		if (
+			uDwmPrivates::IsAccentBlurEnabled(windowData->GetAccentPolicy()) &&
+			(backdrop = g_visualManager.GetOrCreateAccentBackdrop(this, true))
+		)
 		{
-			it = result.first;
+			backdrop->UpdateAccentPolicy();
 		}
-		topLevelWindow->ShowNCBackgroundVisuals(false);
-	}
-	else
-	{
-		THROW_IF_FAILED(topLevelWindow->GetVisual()->GetVisualCollection()->Remove(it->second->GetVisual()));
-		it->second = backdrop;
-	}
-	THROW_IF_FAILED(
-		topLevelWindow->GetVisual()->GetVisualCollection()->InsertRelative(backdrop->GetVisual(), nullptr, true, true)
-	);
-
-	return it->second;
-}
-std::shared_ptr<AcrylicEverywhere::CCompositedBackdrop> AcrylicEverywhere::CBackdropManager::Remove(uDwmPrivates::CTopLevelWindow* topLevelWindow)
-{
-	auto it{ m_backdropMap.find(topLevelWindow) };
-	std::shared_ptr<CCompositedBackdrop> backdrop{ nullptr };
-
-	if (it != m_backdropMap.end())
-	{
-		backdrop = it->second;
-
-		topLevelWindow->ShowNCBackgroundVisuals(true);
-		THROW_IF_FAILED(topLevelWindow->GetVisual()->GetVisualCollection()->Remove(it->second->GetVisual()));
-
-		m_backdropMap.erase(it);
-	}
-
-	return backdrop;
-}
-bool AcrylicEverywhere::CBackdropManager::MatchVisualCollection(uDwmPrivates::VisualCollection* visualCollection)
-{
-	for (auto [topLevelWindow, backdrop] : m_backdropMap)
-	{
-		if (topLevelWindow->GetVisual()->GetVisualCollection() == visualCollection)
+		else if (!uDwmPrivates::IsAccentBlurEnabled(windowData->GetAccentPolicy()))
 		{
-			return true;
+			g_visualManager.RemoveAccent(this);
 		}
 	}
 
-	return false;
+	return hr;
 }
 
-void AcrylicEverywhere::CBackdropManager::Shutdown()
+DWORD STDMETHODCALLTYPE AcrylicEverywhere::MyCTopLevelWindow::GetWindowColorizationColor(UCHAR flags)
 {
-	for (auto [topLevelWindow, backdrop] : m_backdropMap)
+	winrt::com_ptr<CCompositedBackdrop> backdrop{ nullptr };
+	if (backdrop = g_visualManager.GetOrCreateBackdrop(this))
 	{
-		topLevelWindow->ShowNCBackgroundVisuals(true);
-		topLevelWindow->GetVisual()->GetVisualCollection()->Remove(
-			backdrop->GetVisual()
-		);
+		auto mainBackdrop{ backdrop->GetMainBackdrop() };
+		if (mainBackdrop)
+		{
+			auto color { mainBackdrop->currentColor };
+			return ((color.A << 24) | (color.R << 16) | (color.G << 8) | color.B);
+		}
 	}
-	m_backdropMap.clear();
+
+	return (this->*HookHelper::union_cast<decltype(&MyCTopLevelWindow::GetWindowColorizationColor)>(g_CTopLevelWindow_GetWindowColorizationColor_Org))(flags);
+}
+
+DWORD STDMETHODCALLTYPE AcrylicEverywhere::MyCTopLevelWindow::GetCaptionColor()
+{
+	winrt::com_ptr<CCompositedBackdrop> backdrop{ nullptr };
+	if (backdrop = g_visualManager.GetOrCreateBackdrop(this))
+	{
+		auto mainBackdrop{ backdrop->GetMainBackdrop() };
+		if (mainBackdrop)
+		{
+			auto color{ mainBackdrop->currentColor };
+			return ((color.A << 24) | (color.R << 16) | (color.G << 8) | color.B);
+		}
+	}
+
+	return (this->*HookHelper::union_cast<decltype(&MyCTopLevelWindow::GetCaptionColor)>(g_CTopLevelWindow_GetCaptionColor_Org))();
 }
 
 HRESULT STDMETHODCALLTYPE AcrylicEverywhere::MyCTopLevelWindow::InitializeVisualTreeClone(CTopLevelWindow* topLevelWindow, UINT cloneOptions)
 {
 	HRESULT hr{ S_OK };
 
-	bool cloneAllowed{false};
-	auto backdrop{ g_backdropManager.GetOrCreateBackdrop(this) };
-	if (backdrop)
-	{
-		cloneAllowed = backdrop->GetVisual()->AllowVisualTreeClone(false);
-	}
-
 	hr = (this->*HookHelper::union_cast<decltype(&MyCTopLevelWindow::InitializeVisualTreeClone)>(g_CTopLevelWindow_InitializeVisualTreeClone_Org))(topLevelWindow, cloneOptions);
 	
-	if (backdrop)
+	if (SUCCEEDED(hr))
 	{
-		backdrop->GetVisual()->AllowVisualTreeClone(cloneAllowed);
-		if (SUCCEEDED(hr))
-		{
-			auto clonedBackdrop{ std::make_shared<CCompositedBackdrop>(BackdropType::Aero, true) };
-			backdrop->InitializeVisualTreeClone(clonedBackdrop.get());
-			g_backdropManager.CreateWithGivenBackdrop(topLevelWindow, clonedBackdrop);
-		}
+		g_visualManager.TryCloneBackdropForWindow(this, topLevelWindow);
+		g_visualManager.TryCloneAccentBackdropForWindow(this, topLevelWindow);
 	}
-	
+
 	return hr;
 }
 
@@ -206,25 +245,7 @@ HRESULT STDMETHODCALLTYPE AcrylicEverywhere::MyCTopLevelWindow::CloneVisualTree(
 {
 	HRESULT hr{ S_OK };
 
-	bool cloneAllowed{ false };
-	auto backdrop{ g_backdropManager.GetOrCreateBackdrop(this) };
-	if (backdrop)
-	{
-		cloneAllowed = backdrop->GetVisual()->AllowVisualTreeClone(false);
-	}
-
 	hr = (this->*HookHelper::union_cast<decltype(&MyCTopLevelWindow::CloneVisualTree)>(g_CTopLevelWindow_CloneVisualTree_Org))(topLevelWindow, a1, a3, a3);
-
-	if (topLevelWindow && *topLevelWindow && backdrop)
-	{
-		backdrop->GetVisual()->AllowVisualTreeClone(cloneAllowed);
-		if (SUCCEEDED(hr))
-		{
-			auto clonedBackdrop{ std::make_shared<CCompositedBackdrop>(BackdropType::Aero, true) };
-			backdrop->InitializeVisualTreeClone(clonedBackdrop.get());
-			g_backdropManager.CreateWithGivenBackdrop(*topLevelWindow, clonedBackdrop);
-		}
-	}
 
 	return hr;
 }
@@ -234,8 +255,8 @@ HRESULT STDMETHODCALLTYPE AcrylicEverywhere::MyCTopLevelWindow::UpdateNCAreaBack
 	HRESULT hr{ S_OK };
 
 	MyResourceHelper::g_resourceStorage.windowOfInterest = this;
-	MyResourceHelper::g_resourceStorage.borderGeometry = &GetBorderGeometry();
-	MyResourceHelper::g_resourceStorage.titlebarGeometry = &GetTitlebarGeometry();
+	MyResourceHelper::g_resourceStorage.borderGeometry = GetBorderGeometry();
+	MyResourceHelper::g_resourceStorage.titlebarGeometry = GetTitlebarGeometry();
 
 	hr = (this->*HookHelper::union_cast<decltype(&MyCTopLevelWindow::UpdateNCAreaBackground)>(g_CTopLevelWindow_UpdateNCAreaBackground_Org))();
 
@@ -243,11 +264,20 @@ HRESULT STDMETHODCALLTYPE AcrylicEverywhere::MyCTopLevelWindow::UpdateNCAreaBack
 	MyResourceHelper::g_resourceStorage.borderGeometry = nullptr;
 	MyResourceHelper::g_resourceStorage.titlebarGeometry = nullptr;
 
-	std::shared_ptr<CCompositedBackdrop> backdrop{ nullptr };
+	winrt::com_ptr<CCompositedBackdrop> backdrop{ nullptr };
 	uDwmPrivates::CWindowData* windowData{ GetWindowData() };
-	if (windowData && windowData->GetAccentPolicy() && !uDwmPrivates::CAccent::s_IsPolicyActive(windowData->GetAccentPolicy()) && HasNonClientBackground() && (backdrop = g_backdropManager.GetOrCreateBackdrop(this, true)))
+
+	if (
+		windowData && 
+		HasNonClientBackground() && 
+		!uDwmPrivates::IsAccentBlurEnabled(windowData->GetAccentPolicy()) &&
+		(backdrop = g_visualManager.GetOrCreateBackdrop(this, true))
+	)
 	{
-		if (MyResourceHelper::g_resourceStorage.borderRgn && MyResourceHelper::g_resourceStorage.titlebarRgn)
+		if (
+			MyResourceHelper::g_resourceStorage.borderRgn && 
+			MyResourceHelper::g_resourceStorage.titlebarRgn
+		)
 		{
 			wil::unique_hrgn compositedRgn{ CreateRectRgn(0, 0, 0, 0) };
 			
@@ -256,24 +286,18 @@ HRESULT STDMETHODCALLTYPE AcrylicEverywhere::MyCTopLevelWindow::UpdateNCAreaBack
 				MyResourceHelper::g_resourceStorage.borderRgn.get(),
 				MyResourceHelper::g_resourceStorage.titlebarRgn.get(),
 				RGN_OR
-			); 
-			backdrop->Update(
-				this,
-				IsSystemBackdropApplied() ? nullptr : compositedRgn.get()
 			);
+			backdrop->UpdateClipRegion(compositedRgn.get());
 		}
 		else
 		{
-			backdrop->Update(
-				this,
-				IsSystemBackdropApplied() ? nullptr : backdrop->GetClipRegion()
-			);
+			backdrop->UpdateClipRegion(nullptr);
 		}
-		ShowNCBackgroundVisuals(false);
+		backdrop->Update();
 	}
-	else if (g_backdropManager.GetOrCreateBackdrop(this))
+	else if (g_visualManager.GetOrCreateBackdrop(this))
 	{
-		g_backdropManager.Remove(this);
+		g_visualManager.Remove(this);
 	}
 
 	MyResourceHelper::g_resourceStorage.borderRgn.reset();
@@ -285,20 +309,43 @@ HRESULT STDMETHODCALLTYPE AcrylicEverywhere::MyCTopLevelWindow::UpdateNCAreaBack
 HRESULT STDMETHODCALLTYPE AcrylicEverywhere::MyCTopLevelWindow::ValidateVisual()
 {
 	HRESULT hr{ (this->*HookHelper::union_cast<decltype(&MyCTopLevelWindow::ValidateVisual)>(g_CTopLevelWindow_ValidateVisual_Org))() };
-	std::shared_ptr<CCompositedBackdrop> backdrop{ nullptr };
-	CGlassReflectionBackdrop* glassReflection{ nullptr };
+	
 	uDwmPrivates::CWindowData* windowData{ GetWindowData() };
-	if (windowData && windowData->GetAccentPolicy() && !uDwmPrivates::CAccent::s_IsPolicyActive(windowData->GetAccentPolicy()) && (backdrop = g_backdropManager.GetOrCreateBackdrop(this)) && (glassReflection = backdrop->GetGlassReflection()))
+	if (windowData)
 	{
-		glassReflection->UpdateBackdrop(this);
+		{
+			winrt::com_ptr<CCompositedBackdrop> backdrop{ nullptr };
+			if (
+				HasNonClientBackground() &&
+				(backdrop = g_visualManager.GetOrCreateBackdrop(this, true))
+			)
+			{
+				backdrop->UpdateGlassReflection();
+			}
+		}
+		{
+			winrt::com_ptr<CCompositedAccentBackdrop> backdrop{ nullptr };
+			if (
+				uDwmPrivates::IsAccentBlurEnabled(windowData->GetAccentPolicy()) &&
+				(backdrop = g_visualManager.GetOrCreateAccentBackdrop(this, true))
+			)
+			{
+				backdrop->Update();
+			}
+			else if (!uDwmPrivates::IsAccentBlurEnabled(windowData->GetAccentPolicy()))
+			{
+				g_visualManager.RemoveAccent(this);
+			}
+		}
 	}
+
 	return hr;
 }
 
 void STDMETHODCALLTYPE AcrylicEverywhere::MyCTopLevelWindow::Destructor()
 {
-	g_backdropManager.Remove(this);
-
+	g_visualManager.Remove(this);
+	g_visualManager.RemoveAccent(this);
 	return (this->*HookHelper::union_cast<decltype(&MyCTopLevelWindow::Destructor)>(g_CTopLevelWindow_Destructor_Org))();
 }
 
@@ -325,6 +372,94 @@ HRESULT STDMETHODCALLTYPE AcrylicEverywhere::MyResourceHelper::CreateGeometryFro
 	}
 	
 	return reinterpret_cast<decltype(&MyResourceHelper::CreateGeometryFromHRGN)>(g_ResourceHelper_CreateGeometryFromHRGN_Org)(hrgn, geometry);
+}
+
+HRESULT STDMETHODCALLTYPE AcrylicEverywhere::MyCTopLevelWindow3D::EnsureRenderData()
+{
+	HRESULT hr{ S_OK };
+
+	s_window3D = this;
+	uDwmPrivates::CTopLevelWindow* window{ nullptr };
+	winrt::com_ptr<CCompositedBackdrop> backdrop{ nullptr };
+	if (
+		GetWindowData() &&
+		(window = GetWindowData()->GetWindow()) &&
+		(backdrop = g_visualManager.GetOrCreateBackdrop(window, this))
+	)
+	{
+		window->ValidateVisual();
+	}
+
+	hr = (this->*HookHelper::union_cast<decltype(&MyCTopLevelWindow3D::EnsureRenderData)>(g_CTopLevelWindow3D_EnsureRenderData_Org))();
+	s_window3D = nullptr;
+
+	return hr;
+}
+
+AcrylicEverywhere::uDwmPrivates::CCachedVisualImageProxy* STDMETHODCALLTYPE AcrylicEverywhere::MyCSecondaryWindowRepresentation::CreateCVIForAnimation(bool freeze)
+{
+	uDwmPrivates::CCachedVisualImageProxy* result{nullptr};
+
+	auto window{ GetWindowData()->GetWindow() };
+	if (
+		window &&
+		MyCTopLevelWindow3D::s_window3D
+	)
+	{
+		OutputDebugStringW(__FUNCTIONW__);
+		auto updateClonedAnimatedBackdrop = [this](auto& backdrop)
+		{
+			auto pt{ GetOffset() };
+			auto udwmVisual
+			{
+				backdrop->GetSharedVisual().udwmVisual
+			};
+			udwmVisual->SetOffset(
+				{
+					-pt.x,
+					-pt.y
+				}
+			);
+			THROW_IF_FAILED(udwmVisual->UpdateOffset());
+
+			winrt::com_ptr<uDwmPrivates::CDrawVisualTreeInstruction> instruction{ nullptr };
+			THROW_IF_FAILED(
+				uDwmPrivates::CDrawVisualTreeInstruction::Create(
+					instruction.put(),
+					udwmVisual.get()
+				)
+			);
+			MyCTopLevelWindow3D::s_window3D->AddInstruction(
+				instruction.get()
+			);
+		};
+		{
+			winrt::com_ptr<CCompositedBackdrop> backdrop{ nullptr };
+			if ((backdrop = g_visualManager.TryCloneAnimatedBackdropForWindow(window, this)))
+			{
+				updateClonedAnimatedBackdrop(backdrop);
+			}
+		}
+		{
+			winrt::com_ptr<CCompositedAccentBackdrop> backdrop{ nullptr };
+			if ((backdrop = g_visualManager.TryCloneAnimatedAccentBackdropForWindow(window, this)))
+			{
+				updateClonedAnimatedBackdrop(backdrop);
+			}
+		}
+	}
+	
+	result = (this->*HookHelper::union_cast<decltype(&MyCSecondaryWindowRepresentation::CreateCVIForAnimation)>(g_CSecondaryWindowRepresentation_CreateCVIForAnimation_Org))(freeze);
+
+	return result;
+}
+
+void STDMETHODCALLTYPE AcrylicEverywhere::MyCSecondaryWindowRepresentation::Destructor()
+{
+	g_visualManager.RemoveAnimatedBackdrop(this);
+	g_visualManager.RemoveAnimatedAccentBackdrop(this);
+	OutputDebugStringW(__FUNCTIONW__);
+	(this->*HookHelper::union_cast<decltype(&MyCSecondaryWindowRepresentation::Destructor)>(g_CSecondaryWindowRepresentation_Destructor_Org))();
 }
 
 HRESULT STDMETHODCALLTYPE AcrylicEverywhere::MyIWICImagingFactory2::MyCreateBitmapFromHBITMAP(
@@ -361,11 +496,6 @@ int WINAPI AcrylicEverywhere::MyDrawTextW(
 	return ThemeHelper::DrawTextWithAlpha(hdc, lpchText, cchText, lprc, format, reinterpret_cast<decltype(&MyDrawTextW)>(g_DrawTextW_Org));
 }
 
-LRESULT CALLBACK AcrylicEverywhere::WndProc(HWND hWnd, UINT uMessage, WPARAM wParam, LPARAM lParam)
-{
-	return 0;
-}
-
 DWORD WINAPI AcrylicEverywhere::ThreadProc(PVOID parameter)
 {
 	while (!g_outOfLoaderLock)
@@ -394,6 +524,18 @@ DWORD WINAPI AcrylicEverywhere::ThreadProc(PVOID parameter)
 	}
 
 	uDwmPrivates::CDesktopManager::s_pDesktopManagerInstance = reinterpret_cast<uDwmPrivates::CDesktopManager*>(*uDwmPrivates::g_offsetMap.at("CDesktopManager::s_pDesktopManagerInstance").To<PVOID*>(uDwmPrivates::g_udwmModule.get()));
+	uDwmPrivates::CDesktopManager::s_csDwmInstance = reinterpret_cast<LPCRITICAL_SECTION>(uDwmPrivates::g_offsetMap.at("CDesktopManager::s_csDwmInstance").To<PVOID>(uDwmPrivates::g_udwmModule.get()));
+	g_CWindowList_UpdateAccentBlurRect_Org = uDwmPrivates::g_offsetMap.at("CWindowList::UpdateAccentBlurRect").To(uDwmPrivates::g_udwmModule.get());
+	if (SystemHelper::g_buildNumber < 22621)
+	{
+		g_CTopLevelWindow_GetWindowColorizationColor_Org = uDwmPrivates::g_offsetMap.at("CTopLevelWindow::GetWindowColorizationColor").To(uDwmPrivates::g_udwmModule.get());
+	}
+	else
+	{
+		g_CTopLevelWindow_GetCaptionColor_Org = uDwmPrivates::g_offsetMap.at("CTopLevelWindow::GetCaptionColor").To(uDwmPrivates::g_udwmModule.get());
+	}
+	g_CTopLevelWindow_OnClipUpdated_Org = uDwmPrivates::g_offsetMap.at("CTopLevelWindow::OnClipUpdated").To(uDwmPrivates::g_udwmModule.get());
+	g_CTopLevelWindow_OnAccentPolicyUpdated_Org = uDwmPrivates::g_offsetMap.at("CTopLevelWindow::OnAccentPolicyUpdated").To(uDwmPrivates::g_udwmModule.get());
 	g_CTopLevelWindow_UpdateNCAreaBackground_Org = uDwmPrivates::g_offsetMap.at("CTopLevelWindow::UpdateNCAreaBackground").To(uDwmPrivates::g_udwmModule.get());
 	g_CTopLevelWindow_ValidateVisual_Org = uDwmPrivates::g_offsetMap.at("CTopLevelWindow::ValidateVisual").To(uDwmPrivates::g_udwmModule.get());
 	if (SystemHelper::g_buildNumber > 18363)
@@ -406,7 +548,10 @@ DWORD WINAPI AcrylicEverywhere::ThreadProc(PVOID parameter)
 	}
 	g_CTopLevelWindow_Destructor_Org = uDwmPrivates::g_offsetMap.at("CTopLevelWindow::~CTopLevelWindow").To(uDwmPrivates::g_udwmModule.get());
 	g_ResourceHelper_CreateGeometryFromHRGN_Org = uDwmPrivates::g_offsetMap.at("ResourceHelper::CreateGeometryFromHRGN").To(uDwmPrivates::g_udwmModule.get());
-	g_CGlassColorizationParameters_AdjustWindowColorization_Org = uDwmPrivates::g_offsetMap.at("CGlassColorizationParameters::AdjustWindowColorization").To(uDwmPrivates::g_udwmModule.get());
+
+	g_CTopLevelWindow3D_EnsureRenderData_Org = uDwmPrivates::g_offsetMap.at("CTopLevelWindow3D::EnsureRenderData").To(uDwmPrivates::g_udwmModule.get());
+	g_CSecondaryWindowRepresentation_CreateCVIForAnimation_Org = uDwmPrivates::g_offsetMap.at("CSecondaryWindowRepresentation::CreateCVIForAnimation").To(uDwmPrivates::g_udwmModule.get());
+	g_CSecondaryWindowRepresentation_Destructor_Org = uDwmPrivates::g_offsetMap.at("CSecondaryWindowRepresentation::~CSecondaryWindowRepresentation").To(uDwmPrivates::g_udwmModule.get());
 
 	if (SystemHelper::g_buildNumber < 22621)
 	{
@@ -417,6 +562,17 @@ DWORD WINAPI AcrylicEverywhere::ThreadProc(PVOID parameter)
 	}
 	HookHelper::Detours::Write([]
 	{
+		HookHelper::Detours::Attach(&g_CWindowList_UpdateAccentBlurRect_Org, HookHelper::union_cast<PVOID>(&MyCWindowList::UpdateAccentBlurRect));
+		if (SystemHelper::g_buildNumber < 22621)
+		{
+			HookHelper::Detours::Attach(&g_CTopLevelWindow_GetWindowColorizationColor_Org, HookHelper::union_cast<PVOID>(&MyCTopLevelWindow::GetWindowColorizationColor));
+		}
+		else
+		{
+			HookHelper::Detours::Attach(&g_CTopLevelWindow_GetCaptionColor_Org, HookHelper::union_cast<PVOID>(&MyCTopLevelWindow::GetCaptionColor));
+		}
+		HookHelper::Detours::Attach(&g_CTopLevelWindow_OnClipUpdated_Org, HookHelper::union_cast<PVOID>(&MyCTopLevelWindow::OnClipUpdated));
+		HookHelper::Detours::Attach(&g_CTopLevelWindow_OnAccentPolicyUpdated_Org, HookHelper::union_cast<PVOID>(&MyCTopLevelWindow::OnAccentPolicyUpdated));
 		HookHelper::Detours::Attach(&g_CTopLevelWindow_UpdateNCAreaBackground_Org, HookHelper::union_cast<PVOID>(&MyCTopLevelWindow::UpdateNCAreaBackground));
 		HookHelper::Detours::Attach(&g_CTopLevelWindow_ValidateVisual_Org, HookHelper::union_cast<PVOID>(&MyCTopLevelWindow::ValidateVisual));
 		if (SystemHelper::g_buildNumber > 18363)
@@ -429,7 +585,12 @@ DWORD WINAPI AcrylicEverywhere::ThreadProc(PVOID parameter)
 		}
 		HookHelper::Detours::Attach(&g_CTopLevelWindow_Destructor_Org, HookHelper::union_cast<PVOID>(&MyCTopLevelWindow::Destructor));
 		HookHelper::Detours::Attach(&g_ResourceHelper_CreateGeometryFromHRGN_Org, HookHelper::union_cast<PVOID>(&MyResourceHelper::CreateGeometryFromHRGN));
+
+		HookHelper::Detours::Attach(&g_CTopLevelWindow3D_EnsureRenderData_Org, HookHelper::union_cast<PVOID>(&MyCTopLevelWindow3D::EnsureRenderData));
+		HookHelper::Detours::Attach(&g_CSecondaryWindowRepresentation_CreateCVIForAnimation_Org, HookHelper::union_cast<PVOID>(&MyCSecondaryWindowRepresentation::CreateCVIForAnimation));
+		HookHelper::Detours::Attach(&g_CSecondaryWindowRepresentation_Destructor_Org, HookHelper::union_cast<PVOID>(&MyCSecondaryWindowRepresentation::Destructor));
 	});
+	ThemeHelper::RefreshTheme();
 
 	return S_OK;
 }
@@ -459,6 +620,17 @@ void AcrylicEverywhere::Shutdown()
 
 	HookHelper::Detours::Write([]
 	{
+		HookHelper::Detours::Detach(&g_CWindowList_UpdateAccentBlurRect_Org, HookHelper::union_cast<PVOID>(&MyCWindowList::UpdateAccentBlurRect));
+		if (SystemHelper::g_buildNumber < 22621)
+		{
+			HookHelper::Detours::Detach(&g_CTopLevelWindow_GetWindowColorizationColor_Org, HookHelper::union_cast<PVOID>(&MyCTopLevelWindow::GetWindowColorizationColor));
+		}
+		else
+		{
+			HookHelper::Detours::Detach(&g_CTopLevelWindow_GetCaptionColor_Org, HookHelper::union_cast<PVOID>(&MyCTopLevelWindow::GetCaptionColor));
+		}
+		HookHelper::Detours::Detach(&g_CTopLevelWindow_OnClipUpdated_Org, HookHelper::union_cast<PVOID>(&MyCTopLevelWindow::OnClipUpdated));
+		HookHelper::Detours::Detach(&g_CTopLevelWindow_OnAccentPolicyUpdated_Org, HookHelper::union_cast<PVOID>(&MyCTopLevelWindow::OnAccentPolicyUpdated));
 		HookHelper::Detours::Detach(&g_CTopLevelWindow_UpdateNCAreaBackground_Org, HookHelper::union_cast<PVOID>(&MyCTopLevelWindow::UpdateNCAreaBackground));
 		HookHelper::Detours::Detach(&g_CTopLevelWindow_ValidateVisual_Org, HookHelper::union_cast<PVOID>(&MyCTopLevelWindow::ValidateVisual));
 		if (SystemHelper::g_buildNumber > 18363)
@@ -471,8 +643,12 @@ void AcrylicEverywhere::Shutdown()
 		}
 		HookHelper::Detours::Detach(&g_CTopLevelWindow_Destructor_Org, HookHelper::union_cast<PVOID>(&MyCTopLevelWindow::Destructor));
 		HookHelper::Detours::Detach(&g_ResourceHelper_CreateGeometryFromHRGN_Org, HookHelper::union_cast<PVOID>(&MyResourceHelper::CreateGeometryFromHRGN));
+
+		HookHelper::Detours::Detach(&g_CTopLevelWindow3D_EnsureRenderData_Org, HookHelper::union_cast<PVOID>(&MyCTopLevelWindow3D::EnsureRenderData));
+		HookHelper::Detours::Detach(&g_CSecondaryWindowRepresentation_CreateCVIForAnimation_Org, HookHelper::union_cast<PVOID>(&MyCSecondaryWindowRepresentation::CreateCVIForAnimation));
+		HookHelper::Detours::Detach(&g_CSecondaryWindowRepresentation_Destructor_Org, HookHelper::union_cast<PVOID>(&MyCSecondaryWindowRepresentation::Destructor));
 	});
-	g_backdropManager.Shutdown();
+	g_visualManager.Shutdown();
 
 	if (SystemHelper::g_buildNumber < 22621)
 	{
@@ -483,4 +659,8 @@ void AcrylicEverywhere::Shutdown()
 	}
 	g_FillRect_Org = HookHelper::WriteIAT(uDwmPrivates::g_udwmModule.get(), "user32.dll", "FillRect", g_FillRect_Org);
 	g_DrawTextW_Org = HookHelper::WriteIAT(uDwmPrivates::g_udwmModule.get(), "user32.dll", "DrawTextW", g_DrawTextW_Org);
+
+	THROW_IF_FAILED(
+		uDwmPrivates::CDesktopManager::s_pDesktopManagerInstance->GetDCompositionInteropDevice()->WaitForCommitCompletion()
+	);
 }

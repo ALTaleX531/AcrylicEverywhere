@@ -8,11 +8,11 @@ namespace AcrylicEverywhere
 	public:
 		ExposureEffect() : CanvasEffect{ CLSID_D2D1Exposure }
 		{
-			SetExposure();
+			SetExposureAmount();
 		}
 		virtual ~ExposureEffect() = default;
 
-		void SetExposure(float exposure = 1.f)
+		void SetExposureAmount(float exposure = 1.f)
 		{
 			SetProperty(D2D1_EXPOSURE_PROP_EXPOSURE_VALUE, BoxValue(exposure));
 		}

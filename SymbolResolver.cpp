@@ -73,7 +73,6 @@ SymbolResolver::SymbolResolver()
 
 		std::wstring symPath{std::format(L"SRV*{}\\symbols", curDir)};
 		THROW_IF_WIN32_BOOL_FALSE(SymSetSearchPathW(GetCurrentProcess(), symPath.c_str()));
-		LOAD_LIBRARY_SEARCH_DEFAULT_DIRS;
 	}
 	catch (...)
 	{

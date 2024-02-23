@@ -55,7 +55,6 @@ namespace AcrylicEverywhere::uDwmPrivates
 		catch(...) { return wil::ResultFromCaughtException(); }
 
 	protected:
-		CBaseObject() { *(reinterpret_cast<DWORD*>(this) + 2) = 1; };
 		virtual ~CBaseObject() {};
 	};
 
@@ -65,19 +64,16 @@ namespace AcrylicEverywhere::uDwmPrivates
 #define UDWM_CALL_ORG_STATIC(name, ...) [&]{ static const auto s_ptr{AcrylicEverywhere::uDwmPrivates::g_offsetMap.at(#name).To(AcrylicEverywhere::uDwmPrivates::g_udwmModule.get())}; return (HookHelper::union_cast<decltype(&name)>(s_ptr))(## __VA_ARGS__);} ()
 #define UDWM_CALL_ORG_BY_TYPE(type, object, name, ...) [&]{ static const auto s_ptr{AcrylicEverywhere::uDwmPrivates::g_offsetMap.at(name).To(AcrylicEverywhere::uDwmPrivates::g_udwmModule.get())}; return (object->*HookHelper::union_cast<type>(s_ptr))(## __VA_ARGS__); } ()
 #define UDWM_CALL_ORG_STATIC_BY_TYPE(type, name, ...) [&]{ static const auto s_ptr{AcrylicEverywhere::uDwmPrivates::g_offsetMap.at(name).To(AcrylicEverywhere::uDwmPrivates::g_udwmModule.get())}; return (HookHelper::union_cast<type>(s_ptr))(## __VA_ARGS__); } ()
-	struct CWindowList : CBaseObject 
+	struct CBaseGeometryProxy : CBaseObject {};
+	struct CBaseTransformProxy : CBaseObject {};
+	struct CCombinedGeometryProxy : CBaseGeometryProxy {};
+	struct CRgnGeometryProxy : CBaseGeometryProxy 
 	{
-		HRESULT STDMETHODCALLTYPE GetExtendedFrameBounds(
-			HWND hwnd,
-			RECT* rect
-		)
+		HRESULT STDMETHODCALLTYPE Update(LPCRECT rectangles, UINT count)
 		{
-			return UDWM_CALL_ORG(CWindowList::GetExtendedFrameBounds, hwnd, rect);
+			return UDWM_CALL_ORG(CRgnGeometryProxy::Update, rectangles, count);
 		}
 	};
-	struct CBaseGeometryProxy : CBaseObject {};
-	struct CCombinedGeometryProxy : CBaseGeometryProxy {};
-	struct CRgnGeometryProxy : CBaseGeometryProxy {};
 	namespace ResourceHelper
 	{
 		static HRESULT STDMETHODCALLTYPE CreateCombinedGeometry(CBaseGeometryProxy* geometry1, CBaseGeometryProxy* geometry2, UINT combinedMode, CCombinedGeometryProxy** combinedGeometry)
@@ -94,9 +90,11 @@ namespace AcrylicEverywhere::uDwmPrivates
 	}
 	struct VisualCollection;
 	struct CResourceProxy : CBaseObject {};
-	struct CSolidColorLegacyMilBrushProxy : CBaseObject {};
+	struct CBaseLegacyMilBrushProxy : CBaseObject {};
+	struct CSolidColorLegacyMilBrushProxy : CBaseLegacyMilBrushProxy {};
 	struct CVisualProxy : CBaseObject 
 	{
+		HRESULT STDMETHODCALLTYPE SetTransform(CBaseTransformProxy* transfrom) { return UDWM_CALL_ORG(CVisualProxy::SetTransform, transfrom); }
 		HRESULT STDMETHODCALLTYPE SetClip(CBaseGeometryProxy* geometry) { return UDWM_CALL_ORG(CVisualProxy::SetClip, geometry); }
 		HRESULT STDMETHODCALLTYPE SetSize(double width, double height) { return UDWM_CALL_ORG(CVisualProxy::SetSize, width, height); }
 	};
@@ -112,7 +110,44 @@ namespace AcrylicEverywhere::uDwmPrivates
 		}
 		CVisualProxy* GetVisualProxy() const
 		{
-			return reinterpret_cast<CVisualProxy*>(reinterpret_cast<const ULONG_PTR*>(this)[2]);
+			return reinterpret_cast<CVisualProxy* const*>(this)[2];
+		}
+		CVisual* GetParent() const
+		{
+			return reinterpret_cast<CVisual* const*>(this)[3];
+		}
+		HRESULT STDMETHODCALLTYPE SetParent(CVisual* visual)
+		{
+			return UDWM_CALL_ORG(CVisual::SetParent, visual);
+		}
+		bool IsCloneAllowed() const
+		{
+			const BYTE* properties{ nullptr };
+
+			if (SystemHelper::g_buildNumber < 22000)
+			{
+				properties = &reinterpret_cast<BYTE const*>(this)[84];
+			}
+			else if (SystemHelper::g_buildNumber < 22621)
+			{
+				properties = &reinterpret_cast<BYTE const*>(this)[92];
+			}
+			else if (SystemHelper::g_buildNumber < 26020)
+			{
+				properties = &reinterpret_cast<BYTE const*>(this)[92];
+			}
+			else
+			{
+				properties = &reinterpret_cast<BYTE const*>(this)[36];
+			}
+
+			bool allowed{ false };
+			if (properties)
+			{
+				allowed = (*properties & 8) == 0;
+			}
+
+			return allowed;
 		}
 		bool AllowVisualTreeClone(bool allow)
 		{
@@ -151,6 +186,23 @@ namespace AcrylicEverywhere::uDwmPrivates
 
 			return allowed;
 		}
+		bool IsVisible()
+		{
+			if (SystemHelper::g_buildNumber < 22000)
+			{
+				return *(reinterpret_cast<DWORD*>(this) + 22) == 0;
+			}
+			else if (SystemHelper::g_buildNumber < 26020)
+			{
+				return *(reinterpret_cast<DWORD*>(this) + 24) == 0;
+			}
+			else
+			{
+				return *(reinterpret_cast<DWORD*>(this) + 10) == 0;
+			}
+
+			return true;
+		}
 		void STDMETHODCALLTYPE SetInsetFromParent(MARGINS* margins)
 		{
 			return UDWM_CALL_ORG(CVisual::SetInsetFromParent, margins);
@@ -158,6 +210,14 @@ namespace AcrylicEverywhere::uDwmPrivates
 		HRESULT STDMETHODCALLTYPE SetSize(const SIZE& size)
 		{
 			return UDWM_CALL_ORG(CVisual::SetSize, size);
+		}
+		void STDMETHODCALLTYPE SetOffset(const POINT& pt)
+		{
+			return UDWM_CALL_ORG(CVisual::SetOffset, pt);
+		}
+		HRESULT STDMETHODCALLTYPE UpdateOffset()
+		{
+			return UDWM_CALL_ORG(CVisual::UpdateOffset, );
 		}
 		HRESULT STDMETHODCALLTYPE InitializeVisualTreeClone(CBaseObject* baseObject, UINT cloneOptions)
 		{
@@ -171,13 +231,17 @@ namespace AcrylicEverywhere::uDwmPrivates
 		{
 			return UDWM_CALL_ORG(CVisual::Hide, );
 		}
-		void STDMETHODCALLTYPE ConnectToParent(bool connect)
+		HRESULT STDMETHODCALLTYPE ConnectToParent(bool connect)
 		{
 			return UDWM_CALL_ORG(CVisual::ConnectToParent, connect);
 		}
 		void STDMETHODCALLTYPE SetOpacity(double opacity)
 		{
 			return UDWM_CALL_ORG(CVisual::SetOpacity, opacity);
+		}
+		HRESULT STDMETHODCALLTYPE UpdateOpacity()
+		{
+			return UDWM_CALL_ORG(CVisual::UpdateOpacity, );
 		}
 		void STDMETHODCALLTYPE SetScale(double x, double y)
 		{
@@ -190,6 +254,19 @@ namespace AcrylicEverywhere::uDwmPrivates
 		HRESULT STDMETHODCALLTYPE RenderRecursive()
 		{
 			return UDWM_CALL_ORG(CVisual::RenderRecursive, );
+		}
+		void Cloak(bool cloak)
+		{
+			if (!cloak)
+			{
+				SetOpacity(1.);
+				UpdateOpacity();
+			}
+			else
+			{
+				SetOpacity(0.);
+				UpdateOpacity();
+			}
 		}
 		void STDMETHODCALLTYPE SetDirtyChildren()
 		{
@@ -219,26 +296,177 @@ namespace AcrylicEverywhere::uDwmPrivates
 			CVisual* visual,
 			CVisual* referenceVisual,
 			bool insertAfter,
-			bool updateNow
+			bool connectNow
 		)
 		{
-			return UDWM_CALL_ORG(VisualCollection::InsertRelative, visual, referenceVisual, insertAfter, updateNow);
+			return UDWM_CALL_ORG(VisualCollection::InsertRelative, visual, referenceVisual, insertAfter, connectNow);
 		}
 	};
-	struct ACCENT_POLICY;
-	struct CAccent : CBaseObject
+
+	struct IRenderDataBuilder : IUnknown
+	{
+		STDMETHOD(DrawBitmap)(UINT bitmapHandleTableIndex) PURE;
+		STDMETHOD(DrawGeometry)(UINT geometryHandleTableIndex, UINT brushHandleTableIndex) PURE;
+		STDMETHOD(DrawImage)(const D2D1_RECT_F& rect, UINT imageHandleTableIndex) PURE;
+		STDMETHOD(DrawMesh2D)(UINT meshHandleTableIndex, UINT brushHandleTableIndex) PURE;
+		STDMETHOD(DrawRectangle)(const D2D1_RECT_F* rect, UINT brushHandleTableIndex) PURE;
+		STDMETHOD(DrawTileImage)(UINT imageHandleTableIndex, const D2D1_RECT_F& rect, float opacity, const D2D1_POINT_2F& point) PURE;
+		STDMETHOD(DrawVisual)(UINT visualHandleTableIndex) PURE;
+		STDMETHOD(Pop)() PURE;
+		STDMETHOD(PushTransform)(UINT transformHandleTableInfex) PURE;
+		STDMETHOD(DrawSolidRectangle)(const D2D1_RECT_F& rect, const D2D1_COLOR_F& color) PURE;
+	};
+	struct CRenderDataInstruction : CBaseObject
+	{
+		STDMETHOD(WriteInstruction)(
+			IRenderDataBuilder* builder,
+			const struct CVisual* visual
+		) PURE;
+	};
+	struct CDrawGeometryInstruction : CRenderDataInstruction
+	{
+		static HRESULT STDMETHODCALLTYPE Create(CBaseLegacyMilBrushProxy* brush, CBaseGeometryProxy* geometry, CDrawGeometryInstruction** instruction)
+		{
+			return UDWM_CALL_ORG_STATIC(CDrawGeometryInstruction::Create, brush, geometry, instruction);
+		}
+	};
+	struct CRenderDataVisual : CVisual 
+	{
+		HRESULT STDMETHODCALLTYPE AddInstruction(CRenderDataInstruction* instruction)
+		{
+			return UDWM_CALL_ORG(CRenderDataVisual::AddInstruction, instruction);
+		}
+		HRESULT STDMETHODCALLTYPE ClearInstructions()
+		{
+			return UDWM_CALL_ORG(CRenderDataVisual::ClearInstructions, );
+		}
+	};
+	struct CCanvasVisual : CRenderDataVisual 
+	{
+		static HRESULT STDMETHODCALLTYPE Create(CCanvasVisual** visual)
+		{
+			return UDWM_CALL_ORG_STATIC(CCanvasVisual::Create, visual);
+		}
+	};
+	class CEmptyDrawInstruction : public CRenderDataInstruction
+	{
+		DWORD m_refCount{ 1 };
+	public:
+		HRESULT STDMETHODCALLTYPE Initialize() { return S_OK; }
+		STDMETHOD(WriteInstruction)(
+			IRenderDataBuilder* builder,
+			const struct CVisual* visual
+			) override
+		{
+			return S_OK;
+		}
+	};
+	class CDrawVisualTreeInstruction : public CRenderDataInstruction
+	{
+		DWORD m_refCount{ 1 };
+		winrt::com_ptr<CVisual> m_visual{ nullptr };
+	public:
+		CDrawVisualTreeInstruction(CVisual* visual) : CRenderDataInstruction{} { m_visual.copy_from(visual); }
+		HRESULT STDMETHODCALLTYPE Initialize() { return S_OK; }
+		STDMETHOD(WriteInstruction)(
+			IRenderDataBuilder* builder,
+			const struct CVisual* visual
+		) override
+		{
+			UINT visualHandleTableIndex{ 0 };
+			auto visualProxy{ m_visual->GetVisualProxy() };
+			if (visualProxy)
+			{
+				visualHandleTableIndex = *reinterpret_cast<UINT*>(
+					*reinterpret_cast<ULONG_PTR*>(reinterpret_cast<ULONG_PTR>(visualProxy) + 16) + 24ull
+				);
+			}
+
+			return builder->DrawVisual(visualHandleTableIndex);
+		}
+	};
+	struct ACCENT_POLICY
+	{
+		DWORD AccentState;
+		DWORD AccentFlags;
+		DWORD dwGradientColor;
+		DWORD dwAnimationId;
+	};
+	bool IsAccentBlurEnabled(const ACCENT_POLICY* accentPolicy)
+	{
+		return accentPolicy->AccentState > 2 && accentPolicy->AccentState < 5;
+	}
+	struct CAccent : CVisual
 	{
 		static bool STDMETHODCALLTYPE s_IsPolicyActive(const ACCENT_POLICY* accentPolicy)
 		{
 			return UDWM_CALL_ORG_STATIC(CAccent::s_IsPolicyActive, accentPolicy);
 		}
+		CBaseGeometryProxy* const& GetClipGeometry() const
+		{
+			CBaseGeometryProxy* const* geometry{ nullptr };
+
+			if (SystemHelper::g_buildNumber < 22000)
+			{
+				geometry = &reinterpret_cast<CBaseGeometryProxy* const*>(this)[52];
+			}
+			else if (SystemHelper::g_buildNumber < 22621)
+			{
+				geometry = &reinterpret_cast<CBaseGeometryProxy* const*>(this)[53];
+			}
+			else if (SystemHelper::g_buildNumber < 26020)
+			{
+				geometry = &reinterpret_cast<CBaseGeometryProxy* const*>(this)[48];
+			}
+			else
+			{
+				geometry = &reinterpret_cast<CBaseGeometryProxy* const*>(this)[42];
+			}
+
+			return *geometry;
+		}
 	};
+	struct CTopLevelWindow;
+	struct CTopLevelWindow3D;
 	struct CWindowData : CBaseObject
 	{
 		HWND GetHwnd() const
 		{
 			return reinterpret_cast<const HWND*>(this)[5];
 		}
+		POINT GetOffsetToOwner()
+		{
+			return UDWM_CALL_ORG(CWindowData::GetOffsetToOwner, );
+		}
+		CTopLevelWindow* GetWindow() const
+		{
+			CTopLevelWindow* window{nullptr};
+
+			if (SystemHelper::g_buildNumber < 22000)
+			{
+				window = reinterpret_cast<CTopLevelWindow* const*>(this)[48];
+			}
+			else
+			{
+				window = reinterpret_cast<CTopLevelWindow* const*>(this)[55];
+			}
+			return window;
+		}
+		CTopLevelWindow3D* GetWindow3D() const
+		{
+			CTopLevelWindow3D* window{ nullptr };
+
+			if (SystemHelper::g_buildNumber < 22000)
+			{
+				window = reinterpret_cast<CTopLevelWindow3D* const*>(this)[59];
+			}
+			else
+			{
+				window = reinterpret_cast<CTopLevelWindow3D* const*>(this)[56];
+			}
+			return window;
+		}
+
 		ACCENT_POLICY* GetAccentPolicy() const
 		{
 			ACCENT_POLICY* accentPolicy{nullptr};
@@ -305,6 +533,24 @@ namespace AcrylicEverywhere::uDwmPrivates
 			return UDWM_CALL_ORG(CWindowData::IsImmersiveWindow, );
 		}
 	};
+	struct CWindowList : CBaseObject
+	{
+		HRESULT STDMETHODCALLTYPE GetExtendedFrameBounds(
+			HWND hwnd,
+			RECT* rect
+		)
+		{
+			return UDWM_CALL_ORG(CWindowList::GetExtendedFrameBounds, hwnd, rect);
+		}
+		HRESULT STDMETHODCALLTYPE GetSyncedWindowDataByHwnd(HWND hwnd, CWindowData** windowData)
+		{
+			return UDWM_CALL_ORG(CWindowList::GetSyncedWindowDataByHwnd, hwnd, windowData);
+		}
+		void STDMETHODCALLTYPE RegisterAccentState(CWindowData* data, UINT accentState)
+		{
+			return UDWM_CALL_ORG(CWindowList::RegisterAccentState, data, accentState);
+		}
+	};
 	struct CTopLevelWindow : CVisual
 	{
 		void GetBorderMargins(MARGINS* margins) const
@@ -322,79 +568,17 @@ namespace AcrylicEverywhere::uDwmPrivates
 				UDWM_CALL_ORG_BY_TYPE(void (STDMETHODCALLTYPE uDwmPrivates::CTopLevelWindow::*)(MARGINS*) const, this, "CTopLevelWindow::GetFrameMargins", margins);
 			}
 		}
-		CRgnGeometryProxy* const& GetBorderGeometry() const
+		HRESULT STDMETHODCALLTYPE SetWindowOffscreen(bool offscreen)
 		{
-			CRgnGeometryProxy* const* geometry{ nullptr };
-
-			if (SystemHelper::g_buildNumber < 19041)
-			{
-				// TO-DO
-			}
-			else if (SystemHelper::g_buildNumber < 22000)
-			{
-				geometry = &reinterpret_cast<CRgnGeometryProxy* const*>(this)[69];
-			}
-			else if (SystemHelper::g_buildNumber < 22621)
-			{
-				geometry = &reinterpret_cast<CRgnGeometryProxy* const*>(this)[71];
-			}
-			else if (SystemHelper::g_buildNumber < 26020)
-			{
-				auto legacyBackgroundVisual{ reinterpret_cast<CVisual* const*>(this)[40] };
-				if (legacyBackgroundVisual)
-				{
-					geometry = &reinterpret_cast<CRgnGeometryProxy* const*>(legacyBackgroundVisual)[40];
-				}
-			}
-			else
-			{
-				auto legacyBackgroundVisual{ reinterpret_cast<CVisual* const*>(this)[34] };
-				if (legacyBackgroundVisual)
-				{
-					geometry = &reinterpret_cast<CRgnGeometryProxy* const*>(legacyBackgroundVisual)[34];
-				}
-			}
-
-			return *geometry;
-		}
-		CRgnGeometryProxy* const& GetTitlebarGeometry() const
-		{
-			CRgnGeometryProxy* const* geometry{nullptr};
-
-			if (SystemHelper::g_buildNumber < 19041)
-			{
-				// TO-DO
-			}
-			else if (SystemHelper::g_buildNumber < 22000)
-			{
-				geometry = &reinterpret_cast<CRgnGeometryProxy* const*>(this)[70];
-			}
-			else if (SystemHelper::g_buildNumber < 22621)
-			{
-				geometry = &reinterpret_cast<CRgnGeometryProxy* const*>(this)[72];
-			}
-			else if (SystemHelper::g_buildNumber < 26020)
-			{
-				auto legacyBackgroundVisual{ reinterpret_cast<CVisual* const*>(this)[39] };
-				if (legacyBackgroundVisual)
-				{
-					geometry = &reinterpret_cast<CRgnGeometryProxy* const*>(legacyBackgroundVisual)[39];
-				}
-			}
-			else
-			{
-				auto legacyBackgroundVisual{ reinterpret_cast<CVisual* const*>(this)[33] };
-				if (legacyBackgroundVisual)
-				{
-					geometry = &reinterpret_cast<CRgnGeometryProxy* const*>(legacyBackgroundVisual)[33];
-				}
-			}
-
-			return *geometry;
+			return UDWM_CALL_ORG(CTopLevelWindow::SetWindowOffscreen, offscreen);
 		}
 		bool STDMETHODCALLTYPE TreatAsActiveWindow()
 		{
 			return UDWM_CALL_ORG(CTopLevelWindow::TreatAsActiveWindow, );
+		}
+		HRESULT STDMETHODCALLTYPE ValidateVisual()
+		{
+			return UDWM_CALL_ORG(CTopLevelWindow::ValidateVisual, );
 		}
 		RECT* STDMETHODCALLTYPE GetActualWindowRect(
 			RECT* rect,
@@ -460,9 +644,160 @@ namespace AcrylicEverywhere::uDwmPrivates
 
 			return visual;
 		}
+		CAccent* GetAccent() const
+		{
+			CAccent* accent{ nullptr };
+
+			if (SystemHelper::g_buildNumber < 22000)
+			{
+				accent = reinterpret_cast<CAccent* const*>(this)[34];
+			}
+			else if (SystemHelper::g_buildNumber < 22621)
+			{
+				accent = reinterpret_cast<CAccent* const*>(this)[35];
+			}
+			else if (SystemHelper::g_buildNumber < 26020)
+			{
+				accent = reinterpret_cast<CAccent* const*>(this)[37];
+			}
+			else
+			{
+				accent = reinterpret_cast<CAccent* const*>(this)[34];
+			}
+
+			return accent;
+		}
+		CVisual* GetLegacyVisual() const
+		{
+			CVisual* visual{ nullptr };
+
+			if (SystemHelper::g_buildNumber < 22000)
+			{
+				visual = reinterpret_cast<CVisual* const*>(this)[36];
+			}
+			else if (SystemHelper::g_buildNumber < 22621)
+			{
+				visual = reinterpret_cast<CVisual* const*>(this)[37];
+			}
+			else if (SystemHelper::g_buildNumber < 26020)
+			{
+				visual = reinterpret_cast<CVisual* const*>(this)[39];
+			}
+			else
+			{
+				visual = reinterpret_cast<CVisual* const*>(this)[40];
+			}
+
+			return visual;
+		}
+		CVisual* GetClientBlurVisual() const
+		{
+			CVisual* visual{ nullptr };
+
+			if (SystemHelper::g_buildNumber < 22000)
+			{
+				visual = reinterpret_cast<CVisual* const*>(this)[37];
+			}
+			else if (SystemHelper::g_buildNumber < 22621)
+			{
+				visual = reinterpret_cast<CVisual* const*>(this)[39];
+			}
+			else if (SystemHelper::g_buildNumber < 26020)
+			{
+				visual = reinterpret_cast<CVisual* const*>(this)[37];
+			}
+			else
+			{
+				visual = reinterpret_cast<CVisual* const*>(this)[40];
+			}
+
+			return visual;
+		}
+		CVisual* GetSystemBackdropVisual() const
+		{
+			CVisual* visual{ nullptr };
+
+			if (SystemHelper::g_buildNumber < 22000)
+			{
+			}
+			else if (SystemHelper::g_buildNumber < 22621)
+			{
+				visual = reinterpret_cast<CVisual* const*>(this)[38];
+			}
+			else if (SystemHelper::g_buildNumber < 26020)
+			{
+				visual = reinterpret_cast<CVisual* const*>(this)[40];
+			}
+			else
+			{
+				visual = reinterpret_cast<CVisual* const*>(this)[35];
+			}
+
+			return visual;
+		}
+		CVisual* GetAccentColorVisual() const
+		{
+			CVisual* visual{ nullptr };
+
+			if (SystemHelper::g_buildNumber < 22000)
+			{
+			}
+			else if (SystemHelper::g_buildNumber < 22621)
+			{
+			}
+			else if (SystemHelper::g_buildNumber < 26020)
+			{
+				visual = reinterpret_cast<CVisual* const*>(this)[41];
+			}
+			else
+			{
+				visual = reinterpret_cast<CVisual* const*>(this)[36];
+			}
+
+			return visual;
+		}
 		auto GetNCBackgroundVisuals() const
 		{
 			std::vector<winrt::com_ptr<CVisual>> visuals{};
+
+			if (GetLegacyVisual())
+			{
+				visuals.emplace_back(nullptr).copy_from(GetLegacyVisual());
+			}
+			if (GetAccent())
+			{
+				visuals.emplace_back(nullptr).copy_from(GetAccent());
+			}
+			if (GetClientBlurVisual())
+			{
+				visuals.emplace_back(nullptr).copy_from(GetClientBlurVisual());
+			}
+			if (GetSystemBackdropVisual())
+			{
+				visuals.emplace_back(nullptr).copy_from(GetSystemBackdropVisual());
+			}
+			if (GetAccentColorVisual())
+			{
+				visuals.emplace_back(nullptr).copy_from(GetAccentColorVisual());
+			}
+
+			return visuals;
+		}
+		bool IsNCBackgroundVisualsCloneAllAllowed()
+		{
+			for (const auto& visual : GetNCBackgroundVisuals())
+			{
+				if (!visual->IsCloneAllowed())
+				{
+					return false;
+				}
+			}
+
+			return true;
+		}
+		CSolidColorLegacyMilBrushProxy* const* GetBorderMilBrush() const
+		{
+			CSolidColorLegacyMilBrushProxy* const* brush{ nullptr };
 
 			if (SystemHelper::g_buildNumber < 19041)
 			{
@@ -470,111 +805,115 @@ namespace AcrylicEverywhere::uDwmPrivates
 			}
 			else if (SystemHelper::g_buildNumber < 22000)
 			{
-				if (reinterpret_cast<CVisual* const*>(this)[34]) // accent
-				{
-					visuals.emplace_back(nullptr).copy_from(reinterpret_cast<CVisual* const*>(this)[34]);
-				}
-				if (reinterpret_cast<CVisual* const*>(this)[36]) // legacy
-				{
-					visuals.emplace_back(nullptr).copy_from(reinterpret_cast<CVisual* const*>(this)[36]);
-				}
-				if (reinterpret_cast<CVisual* const*>(this)[37]) // client blur
-				{
-					visuals.emplace_back(nullptr).copy_from(reinterpret_cast<CVisual* const*>(this)[37]);
-				}
+				brush = &reinterpret_cast<CSolidColorLegacyMilBrushProxy* const*>(this)[94];
 			}
 			else if (SystemHelper::g_buildNumber < 22621)
 			{
-				if (reinterpret_cast<CVisual* const*>(this)[35]) // accent
-				{
-					visuals.emplace_back(nullptr).copy_from(reinterpret_cast<CVisual* const*>(this)[35]);
-				}
-				if (reinterpret_cast<CVisual* const*>(this)[37]) // legacy
-				{
-					visuals.emplace_back(nullptr).copy_from(reinterpret_cast<CVisual* const*>(this)[37]);
-				}
-				if (reinterpret_cast<CVisual* const*>(this)[38]) // system backdrop
-				{
-					visuals.emplace_back(nullptr).copy_from(reinterpret_cast<CVisual* const*>(this)[38]);
-				}
-				if (reinterpret_cast<CVisual* const*>(this)[39]) // client blur
-				{
-					visuals.emplace_back(nullptr).copy_from(reinterpret_cast<CVisual* const*>(this)[39]);
-				}
+				brush = &reinterpret_cast<CSolidColorLegacyMilBrushProxy* const*>(this)[98];
 			}
 			else if (SystemHelper::g_buildNumber < 26020)
 			{
-				if (reinterpret_cast<CVisual* const*>(this)[37]) // accent
+				auto legacyBackgroundVisual{ reinterpret_cast<CVisual* const*>(this)[39] };
+				if (legacyBackgroundVisual)
 				{
-					visuals.emplace_back(nullptr).copy_from(reinterpret_cast<CVisual* const*>(this)[37]);
-				}
-				if (reinterpret_cast<CVisual* const*>(this)[39]) // legacy
-				{
-					visuals.emplace_back(nullptr).copy_from(reinterpret_cast<CVisual* const*>(this)[39]);
-				}
-				if (reinterpret_cast<CVisual* const*>(this)[40]) // system backdrop
-				{
-					visuals.emplace_back(nullptr).copy_from(reinterpret_cast<CVisual* const*>(this)[40]);
-				}
-				if (reinterpret_cast<CVisual* const*>(this)[41]) // accent color
-				{
-					visuals.emplace_back(nullptr).copy_from(reinterpret_cast<CVisual* const*>(this)[41]);
-				}
-				if (reinterpret_cast<CVisual* const*>(this)[42]) // client blur
-				{
-					visuals.emplace_back(nullptr).copy_from(reinterpret_cast<CVisual* const*>(this)[42]);
+					brush = &reinterpret_cast<CSolidColorLegacyMilBrushProxy* const*>(legacyBackgroundVisual)[38];
 				}
 			}
 			else
 			{
-				if (reinterpret_cast<CVisual* const*>(this)[32]) // legacy
+				auto legacyBackgroundVisual{ reinterpret_cast<CVisual* const*>(this)[34] };
+				if (legacyBackgroundVisual)
 				{
-					visuals.emplace_back(nullptr).copy_from(reinterpret_cast<CVisual* const*>(this)[32]);
-				}
-				if (reinterpret_cast<CVisual* const*>(this)[34]) // accent
-				{
-					visuals.emplace_back(nullptr).copy_from(reinterpret_cast<CVisual* const*>(this)[34]);
-				}
-				if (reinterpret_cast<CVisual* const*>(this)[35]) // system backdrop
-				{
-					visuals.emplace_back(nullptr).copy_from(reinterpret_cast<CVisual* const*>(this)[35]);
-				}
-				if (reinterpret_cast<CVisual* const*>(this)[36]) // accent color
-				{
-					visuals.emplace_back(nullptr).copy_from(reinterpret_cast<CVisual* const*>(this)[36]);
-				}
-				if (reinterpret_cast<CVisual* const*>(this)[37]) // client blur
-				{
-					visuals.emplace_back(nullptr).copy_from(reinterpret_cast<CVisual* const*>(this)[37]);
+					brush = &reinterpret_cast<CSolidColorLegacyMilBrushProxy* const*>(legacyBackgroundVisual)[32];
 				}
 			}
 
-			return visuals;
+			return brush;
 		}
-		void ShowNCBackgroundVisuals(bool show)
+		CBaseGeometryProxy* const& GetClipGeometry() const
 		{
-			auto showInternal = [show](CVisual* visual)
-			{
-				if (show)
-				{
-					//visual->Unhide();
-					visual->SetOpacity(1.);
-					visual->SendSetOpacity(1.);
-					//visual->ConnectToParent(true);
-				}
-				else
-				{
-					//visual->Hide();
-					visual->SetOpacity(0.);
-					visual->SendSetOpacity(0.);
-					//visual->ConnectToParent(false);
-				}
-			};
+			CBaseGeometryProxy* const* geometry{ nullptr };
 
-			for (auto visual : GetNCBackgroundVisuals())
+			if (SystemHelper::g_buildNumber < 22000)
 			{
-				showInternal(visual.get());
+				geometry = &reinterpret_cast<CBaseGeometryProxy* const*>(this)[46];
 			}
+			else
+			{
+				geometry = &reinterpret_cast<CBaseGeometryProxy* const*>(this)[53];
+			}
+
+			return *geometry;
+		}
+		CRgnGeometryProxy* const* GetBorderGeometry() const
+		{
+			CRgnGeometryProxy* const* geometry{ nullptr };
+
+			if (SystemHelper::g_buildNumber < 19041)
+			{
+				// TO-DO
+			}
+			else if (SystemHelper::g_buildNumber < 22000)
+			{
+				geometry = &reinterpret_cast<CRgnGeometryProxy* const*>(this)[69];
+			}
+			else if (SystemHelper::g_buildNumber < 22621)
+			{
+				geometry = &reinterpret_cast<CRgnGeometryProxy* const*>(this)[71];
+			}
+			else if (SystemHelper::g_buildNumber < 26020)
+			{
+				auto legacyBackgroundVisual{ reinterpret_cast<CVisual* const*>(this)[39] };
+				if (legacyBackgroundVisual)
+				{
+					geometry = &reinterpret_cast<CRgnGeometryProxy* const*>(legacyBackgroundVisual)[40];
+				}
+			}
+			else
+			{
+				auto legacyBackgroundVisual{ reinterpret_cast<CVisual* const*>(this)[34] };
+				if (legacyBackgroundVisual)
+				{
+					geometry = &reinterpret_cast<CRgnGeometryProxy* const*>(legacyBackgroundVisual)[34];
+				}
+			}
+
+			return geometry;
+		}
+		CRgnGeometryProxy* const* GetTitlebarGeometry() const
+		{
+			CRgnGeometryProxy* const* geometry{ nullptr };
+
+			if (SystemHelper::g_buildNumber < 19041)
+			{
+				// TO-DO
+			}
+			else if (SystemHelper::g_buildNumber < 22000)
+			{
+				geometry = &reinterpret_cast<CRgnGeometryProxy* const*>(this)[70];
+			}
+			else if (SystemHelper::g_buildNumber < 22621)
+			{
+				geometry = &reinterpret_cast<CRgnGeometryProxy* const*>(this)[72];
+			}
+			else if (SystemHelper::g_buildNumber < 26020)
+			{
+				auto legacyBackgroundVisual{ reinterpret_cast<CVisual* const*>(this)[39] };
+				if (legacyBackgroundVisual)
+				{
+					geometry = &reinterpret_cast<CRgnGeometryProxy* const*>(legacyBackgroundVisual)[39];
+				}
+			}
+			else
+			{
+				auto legacyBackgroundVisual{ reinterpret_cast<CVisual* const*>(this)[33] };
+				if (legacyBackgroundVisual)
+				{
+					geometry = &reinterpret_cast<CRgnGeometryProxy* const*>(legacyBackgroundVisual)[33];
+				}
+			}
+
+			return geometry;
 		}
 
 		bool HasNonClientBackground() const
@@ -657,14 +996,108 @@ namespace AcrylicEverywhere::uDwmPrivates
 			return systemBackdropApplied;
 		}
 	};
+	struct CSecondaryWindowRepresentation
+	{
+		CWindowData* GetWindowData() const
+		{
+			return reinterpret_cast<CWindowData* const*>(this)[8];
+		}
+		CWindowData* GetOwnedWindowData() const
+		{
+			return reinterpret_cast<CWindowData* const*>(this)[4];
+		}
+		CVisual* GetCachedVisual() const
+		{
+			return reinterpret_cast<CVisual* const*>(this)[6];
+		}
+		CVisual* GetVisual() const
+		{
+			return reinterpret_cast<CVisual* const*>(this)[7];
+		}
+		POINT GetOffset() const
+		{
+			return
+			{
+				*(reinterpret_cast<LONG const*>(this) + 22),
+				*(reinterpret_cast<LONG const*>(this) + 24)
+			};
+		}
+		RECT GetRect() const
+		{
+			return 
+			{
+				*(reinterpret_cast<LONG const*>(this) + 23),
+				*(reinterpret_cast<LONG const*>(this) + 25),
+				*(reinterpret_cast<LONG const*>(this) + 20),
+				*(reinterpret_cast<LONG const*>(this) + 21)
+			};
+		}
+	};
+	struct CCachedVisualImageProxy : CBaseObject 
+	{
+		HRESULT STDMETHODCALLTYPE Freeze(bool freeze)
+		{
+			return UDWM_CALL_ORG(CCachedVisualImageProxy::Freeze, freeze);
+		}
+		HRESULT STDMETHODCALLTYPE Snapshot(LPCRECT lprc)
+		{
+			return UDWM_CALL_ORG(CCachedVisualImageProxy::Snapshot, lprc);
+		}
+		HRESULT STDMETHODCALLTYPE Update(
+			const D2D1_RECT_F& rect, 
+			const SIZE& size, 
+			struct CRectResourceProxy* rectResource,
+			struct CSizeResourceProxxy* sizeResource,
+			CVisualProxy* visualProxy,
+			UINT brushMappingMode
+		)
+		{
+			return UDWM_CALL_ORG(
+				CCachedVisualImageProxy::Update,
+				rect,
+				size,
+				rectResource,
+				sizeResource,
+				visualProxy,
+				brushMappingMode
+			);
+		}
+	};
+	struct CTopLevelWindow3D : CRenderDataVisual
+	{
+		CWindowData* GetWindowData() const
+		{
+			CWindowData* windowData{ nullptr };
+
+			if (SystemHelper::g_buildNumber < 22000)
+			{
+				windowData = reinterpret_cast<CWindowData* const*>(this)[41];
+			}
+			else
+			{
+				windowData = reinterpret_cast<CWindowData* const*>(this)[42];
+			}
+
+			return windowData;
+		}
+		CCachedVisualImageProxy** GetCachedVisualImage()
+		{
+			return reinterpret_cast<CCachedVisualImageProxy**>(this) + 68;
+		}
+	};
 
 	struct CDesktopManager
 	{
 		inline static CDesktopManager* s_pDesktopManagerInstance{ nullptr };
+		inline static LPCRITICAL_SECTION s_csDwmInstance{ nullptr };
 
+		bool IsVanillaTheme() const
+		{
+			return reinterpret_cast<bool const*>(this)[25];
+		}
 		CWindowList* GetWindowList() const
 		{
-			return reinterpret_cast<CWindowList*>(reinterpret_cast<PVOID const*>(this)[61]);
+			return reinterpret_cast<CWindowList* const*>(this)[61];
 		}
 		IWICImagingFactory2* GetWICFactory() const
 		{
@@ -676,19 +1109,19 @@ namespace AcrylicEverywhere::uDwmPrivates
 			}
 			else if (SystemHelper::g_buildNumber < 22000)
 			{
-				factory = reinterpret_cast<IWICImagingFactory2*>(reinterpret_cast<PVOID const*>(this)[39]);
+				factory = reinterpret_cast<IWICImagingFactory2* const*>(this)[39];
 			}
 			else if (SystemHelper::g_buildNumber < 22621)
 			{
-				factory = reinterpret_cast<IWICImagingFactory2*>(reinterpret_cast<PVOID const*>(this)[30]);
+				factory = reinterpret_cast<IWICImagingFactory2* const*>(this)[30];
 			}
 			else if (SystemHelper::g_buildNumber < 26020)
 			{
-				factory = reinterpret_cast<IWICImagingFactory2*>(reinterpret_cast<PVOID const*>(this)[31]);
+				factory = reinterpret_cast<IWICImagingFactory2* const*>(this)[31];
 			}
 			else
 			{
-				factory = reinterpret_cast<IWICImagingFactory2*>(reinterpret_cast<PVOID const*>(this)[30]);
+				factory = reinterpret_cast<IWICImagingFactory2* const*>(this)[30];
 			}
 
 			return factory;

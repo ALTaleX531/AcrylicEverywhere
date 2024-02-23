@@ -4,6 +4,22 @@
 
 namespace AcrylicEverywhere::ThemeHelper
 {
+	inline HRESULT RefreshTheme()
+	{
+		static const auto s_actualSetSystemVisualStyle{ reinterpret_cast<HRESULT(WINAPI*)(LPCWSTR, LPCWSTR, LPCWSTR, int)>(GetProcAddress(GetModuleHandleW(L"UxTheme.dll"), MAKEINTRESOURCEA(65))) };
+
+		if (!s_actualSetSystemVisualStyle) [[unlikely]]
+		{
+			return E_FAIL;
+		}
+
+		WCHAR themeFileName[MAX_PATH + 1];
+		WCHAR colorScheme[MAX_PATH + 1];
+		WCHAR canonicalName[MAX_PATH + 1];
+		GetCurrentThemeName(themeFileName, MAX_PATH, colorScheme, MAX_PATH, canonicalName, MAX_PATH);
+		return s_actualSetSystemVisualStyle(themeFileName, colorScheme, canonicalName, 0);
+	}
+
 	static HRESULT DrawTextWithGlow(
 		HDC hdc,
 		LPCWSTR pszText,

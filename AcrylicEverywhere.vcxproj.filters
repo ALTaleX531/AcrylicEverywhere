@@ -19,17 +19,20 @@
     <Filter Include="头文件\Helpers">
       <UniqueIdentifier>{1c0e7cb1-c48b-4eff-91e5-85059f0b3e85}</UniqueIdentifier>
     </Filter>
-    <Filter Include="源文件\Helpers">
-      <UniqueIdentifier>{6955ae8d-9c32-4f1e-bccd-335a78c9f3a9}</UniqueIdentifier>
-    </Filter>
     <Filter Include="头文件\Implementation">
       <UniqueIdentifier>{14d77094-d666-42e2-befd-52f161431fbe}</UniqueIdentifier>
     </Filter>
     <Filter Include="源文件\Implementation">
       <UniqueIdentifier>{18c871ff-cda1-4ebe-8250-13905753f153}</UniqueIdentifier>
     </Filter>
-    <Filter Include="头文件\Effects">
+    <Filter Include="头文件\Win2D">
       <UniqueIdentifier>{06ccb504-005a-4f98-a2dc-a69187792e0e}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="源文件\Helpers">
+      <UniqueIdentifier>{6955ae8d-9c32-4f1e-bccd-335a78c9f3a9}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="头文件\Backdrops">
+      <UniqueIdentifier>{44cb44e6-597a-4c42-9f98-177870393a6f}</UniqueIdentifier>
     </Filter>
   </ItemGroup>
   <ItemGroup>
@@ -54,12 +57,6 @@
     <ClInclude Include="HookHelper.hpp">
       <Filter>头文件\Helpers</Filter>
     </ClInclude>
-    <ClInclude Include="dcompPrivates.hpp">
-      <Filter>头文件\Implementation</Filter>
-    </ClInclude>
-    <ClInclude Include="udwmPrivates.hpp">
-      <Filter>头文件\Implementation</Filter>
-    </ClInclude>
     <ClInclude Include="AcrylicEverywhere.hpp">
       <Filter>头文件\Implementation</Filter>
     </ClInclude>
@@ -69,38 +66,74 @@
     <ClInclude Include="ThemeHelper.hpp">
       <Filter>头文件\Helpers</Filter>
     </ClInclude>
-    <ClInclude Include="BackdropMaterials.hpp">
-      <Filter>头文件\Implementation</Filter>
-    </ClInclude>
     <ClInclude Include="BlendEffect.hpp">
-      <Filter>头文件\Effects</Filter>
+      <Filter>头文件\Win2D</Filter>
     </ClInclude>
     <ClInclude Include="BorderEffect.hpp">
-      <Filter>头文件\Effects</Filter>
+      <Filter>头文件\Win2D</Filter>
     </ClInclude>
     <ClInclude Include="ColorSourceEffect.hpp">
-      <Filter>头文件\Effects</Filter>
+      <Filter>头文件\Win2D</Filter>
     </ClInclude>
     <ClInclude Include="GaussianBlurEffect.hpp">
-      <Filter>头文件\Effects</Filter>
+      <Filter>头文件\Win2D</Filter>
     </ClInclude>
     <ClInclude Include="OpacityEffect.hpp">
-      <Filter>头文件\Effects</Filter>
+      <Filter>头文件\Win2D</Filter>
     </ClInclude>
     <ClInclude Include="CompositeEffect.hpp">
-      <Filter>头文件\Effects</Filter>
+      <Filter>头文件\Win2D</Filter>
     </ClInclude>
     <ClInclude Include="CanvasEffect.hpp">
-      <Filter>头文件\Effects</Filter>
+      <Filter>头文件\Win2D</Filter>
     </ClInclude>
     <ClInclude Include="CrossFadeEffect.hpp">
-      <Filter>头文件\Effects</Filter>
+      <Filter>头文件\Win2D</Filter>
     </ClInclude>
     <ClInclude Include="SaturationEffect.hpp">
-      <Filter>头文件\Effects</Filter>
+      <Filter>头文件\Win2D</Filter>
     </ClInclude>
     <ClInclude Include="ExposureEffect.hpp">
-      <Filter>头文件\Effects</Filter>
+      <Filter>头文件\Win2D</Filter>
+    </ClInclude>
+    <ClInclude Include="CanvasGeometry.hpp">
+      <Filter>头文件\Win2D</Filter>
+    </ClInclude>
+    <ClInclude Include="ColorConversion.hpp">
+      <Filter>头文件\Helpers</Filter>
+    </ClInclude>
+    <ClInclude Include="VisualManager.hpp">
+      <Filter>头文件\Implementation</Filter>
+    </ClInclude>
+    <ClInclude Include="AcrylicBackdrop.hpp">
+      <Filter>头文件\Backdrops</Filter>
+    </ClInclude>
+    <ClInclude Include="DCompBackdrop.hpp">
+      <Filter>头文件\Backdrops</Filter>
+    </ClInclude>
+    <ClInclude Include="uDwmBackdrop.hpp">
+      <Filter>头文件\Backdrops</Filter>
+    </ClInclude>
+    <ClInclude Include="CompositedBackdrop.hpp">
+      <Filter>头文件\Implementation</Filter>
+    </ClInclude>
+    <ClInclude Include="DCompPrivates.hpp">
+      <Filter>头文件\Helpers</Filter>
+    </ClInclude>
+    <ClInclude Include="uDwmPrivates.hpp">
+      <Filter>头文件\Helpers</Filter>
+    </ClInclude>
+    <ClInclude Include="MicaBackdrop.hpp">
+      <Filter>头文件\Backdrops</Filter>
+    </ClInclude>
+    <ClInclude Include="BlurBackdrop.hpp">
+      <Filter>头文件\Backdrops</Filter>
+    </ClInclude>
+    <ClInclude Include="AeroBackdrop.hpp">
+      <Filter>头文件\Backdrops</Filter>
+    </ClInclude>
+    <ClInclude Include="GlassReflectionBackdrop.hpp">
+      <Filter>头文件\Backdrops</Filter>
     </ClInclude>
   </ItemGroup>
   <ItemGroup>
@@ -119,8 +152,8 @@
     <ClCompile Include="SymbolResolver.cpp">
       <Filter>源文件\Helpers</Filter>
     </ClCompile>
-    <ClCompile Include="BackdropMaterials.cpp">
-      <Filter>源文件\Implementation</Filter>
+    <ClCompile Include="ColorConversion.cpp">
+      <Filter>源文件\Helpers</Filter>
     </ClCompile>
   </ItemGroup>
   <ItemGroup>
