@@ -141,6 +141,8 @@ namespace AcrylicEverywhere
 
 		HRESULT STDMETHODCALLTYPE Update(uDwmPrivates::CTopLevelWindow* window) try
 		{
+			THROW_HR_IF_NULL(E_POINTER, s_sharedResources.drawingSurface);
+
 			RECT windowRect{};
 			THROW_HR_IF_NULL(E_INVALIDARG, window->GetActualWindowRect(&windowRect, false, true, false));
 

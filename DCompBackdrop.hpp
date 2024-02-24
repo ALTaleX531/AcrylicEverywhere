@@ -85,7 +85,6 @@ namespace AcrylicEverywhere
 	struct CDCompBackdrop : CDCompBackdropBase
 	{
 		std::chrono::milliseconds crossfadeTime{ 87 };
-		winrt::Windows::UI::Composition::CompositionScopedBatch crossFadeAnimationBatch{ nullptr };
 		winrt::Windows::UI::Composition::CompositionBrush currentBrush{ nullptr };
 		winrt::Windows::UI::Color currentColor{};
 
@@ -96,7 +95,6 @@ namespace AcrylicEverywhere
 		{
 			if (currentBrush != newBrush)
 			{
-				currentBrush = newBrush;
 				if (currentBrush && crossfadeTime.count())
 				{
 					const auto crossfadeBrush
@@ -107,9 +105,9 @@ namespace AcrylicEverywhere
 							newBrush
 						)
 					};
+					currentBrush = newBrush;
 					spriteVisual.Brush(crossfadeBrush);
 
-					crossFadeAnimationBatch = compositor.CreateScopedBatch(winrt::Windows::UI::Composition::CompositionBatchTypes::Animation);
 					crossfadeBrush.StartAnimation(
 						L"Crossfade.Weight",
 						CDCompResources::CreateCrossFadeAnimation(
@@ -117,15 +115,10 @@ namespace AcrylicEverywhere
 							crossfadeTime
 						)
 					);
-					crossFadeAnimationBatch.End();
-					crossFadeAnimationBatch.Completed([this, newBrush](auto&&, auto&&)
-					{
-						spriteVisual.Brush(currentBrush);
-						crossFadeAnimationBatch = nullptr;
-					});
 				}
 				else
 				{
+					currentBrush = newBrush;
 					spriteVisual.Brush(currentBrush);
 				}
 			}

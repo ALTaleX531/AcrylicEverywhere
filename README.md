@@ -9,11 +9,10 @@ The name is a bit inaccurate, it should be called `TranslucentEverywhere`. At fi
 This project is not directly usable for production purposes, but you can easily develop it.
 
 ## To-Do
-1. Fix crash caused by uninjecting dwm with unfinished crossfade animation
-2. Fix glass reflection abnormal offset
-3. Optimize aero effect recipe to make it more accurate
-4. Optimize animated real-time blur backdrop in Windows 11 (not quite important)
-5. Optimize program compatibility
+1. Fix glass reflection abnormal offset
+2. Optimize aero effect recipe to make it more accurate
+3. Optimize animated real-time blur backdrop in Windows 11 (not quite important)
+4. Optimize program compatibility
 
 ## Dependencies and References
 ### [Microsoft Research Detours Package](https://github.com/microsoft/Detours)  
