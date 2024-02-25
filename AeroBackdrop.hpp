@@ -63,7 +63,7 @@ namespace AcrylicEverywhere
 
 			auto blurredBackdropBalanceEffect{ winrt::make_self<ExposureEffect>() };
 			blurredBackdropBalanceEffect->SetName(L"BlurBalance");
-			blurredBackdropBalanceEffect->SetExposureAmount(-blurBalance * 2.f);
+			blurredBackdropBalanceEffect->SetExposureAmount(-blurBalance);
 			if (hostBackdrop)
 			{
 				blurredBackdropBalanceEffect->SetInput(winrt::Windows::UI::Composition::CompositionEffectSourceParameter{ L"Backdrop" });
@@ -89,7 +89,7 @@ namespace AcrylicEverywhere
 			colorBalanceEffect->SetInput(*colorBlendEffect);
 
 			auto glowBlendEffect{ winrt::make_self<BlendEffect>() };
-			glowBlendEffect->SetBlendMode(D2D1_BLEND_MODE_OVERLAY);
+			glowBlendEffect->SetBlendMode(D2D1_BLEND_MODE_LUMINOSITY);
 			glowBlendEffect->SetBackground(*colorBalanceEffect);
 			glowBlendEffect->SetForeground(*glowOpacityEffect);
 
