@@ -25,6 +25,10 @@ namespace AcrylicEverywhere
 	struct MyCWindowList : uDwmPrivates::CWindowList
 	{
 		HRESULT STDMETHODCALLTYPE UpdateAccentBlurRect(const MILCMD_DWM_REDIRECTION_ACCENTBLURRECTUPDATE* milCmd);
+		HRESULT STDMETHODCALLTYPE BlurBehindChange(
+			struct IDwmWindow* window,
+			const DWM_BLURBEHIND* blurbehind
+		);
 	};
 	struct MyCTopLevelWindow : uDwmPrivates::CTopLevelWindow
 	{
@@ -276,7 +280,8 @@ HRESULT STDMETHODCALLTYPE AcrylicEverywhere::MyCTopLevelWindow::UpdateNCAreaBack
 	{
 		if (
 			MyResourceHelper::g_resourceStorage.borderRgn && 
-			MyResourceHelper::g_resourceStorage.titlebarRgn
+			MyResourceHelper::g_resourceStorage.titlebarRgn &&
+			!IsSystemBackdropApplied()
 		)
 		{
 			wil::unique_hrgn compositedRgn{ CreateRectRgn(0, 0, 0, 0) };
@@ -500,9 +505,9 @@ DWORD WINAPI AcrylicEverywhere::ThreadProc(PVOID parameter)
 {
 	while (!g_outOfLoaderLock)
 	{
-		Sleep(50);
+		Sleep(100);
 	}
-	Sleep(100);
+	Sleep(200);
 
 	SymbolResolver symbolResolver{};
 	HRESULT hr = symbolResolver.Walk(L"udwm.dll", "*!*", [](PSYMBOL_INFO symInfo, ULONG symbolSize) -> bool
@@ -590,7 +595,10 @@ DWORD WINAPI AcrylicEverywhere::ThreadProc(PVOID parameter)
 		HookHelper::Detours::Attach(&g_CSecondaryWindowRepresentation_CreateCVIForAnimation_Org, HookHelper::union_cast<PVOID>(&MyCSecondaryWindowRepresentation::CreateCVIForAnimation));
 		HookHelper::Detours::Attach(&g_CSecondaryWindowRepresentation_Destructor_Org, HookHelper::union_cast<PVOID>(&MyCSecondaryWindowRepresentation::Destructor));
 	});
-	ThemeHelper::RefreshTheme();
+	// WM_THEMECHANGED dwm will reload the whole theme
+	// WM_WININICHANGE dwm refresh part of the settings
+	PostMessageW(FindWindowW(L"Dwm", nullptr), WM_THEMECHANGED, 0, 0);
+	// WM_DWMCOLORIZATIONCOLORCHANGED
 
 	return S_OK;
 }
@@ -663,4 +671,5 @@ void AcrylicEverywhere::Shutdown()
 	THROW_IF_FAILED(
 		uDwmPrivates::CDesktopManager::s_pDesktopManagerInstance->GetDCompositionInteropDevice()->WaitForCommitCompletion()
 	);
+	PostMessageW(FindWindowW(L"Dwm", nullptr), 0x31A, 0, 0);
 }

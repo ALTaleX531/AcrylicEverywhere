@@ -18,18 +18,20 @@ BOOL CALLBACK SymbolResolver::SymCallback(
 			auto& symbolResolver{*reinterpret_cast<SymbolResolver*>(UserContext)};
 			auto event{reinterpret_cast<PIMAGEHLP_CBA_EVENTW>(CallbackData)};
 
-			if (wcsstr(event->desc, L"from http://"))
+			if (wcsstr(event->desc, L"from http://") && !GetConsoleWindow())
 			{
-				FreeConsole();
-				AllocConsole();
-				freopen_s(&symbolResolver.m_fpstdout, "CONOUT$", "w+t", stdout);
-				freopen_s(&symbolResolver.m_fpstdout, "CONIN$", "r+t", stdin);
-				std::wcout.imbue(std::locale("chs"));
+				if (AttachConsole(GetCurrentProcessId()) || AllocConsole())
+				{
+					FILE* fpstdin{ stdin }, * fpstdout{ stdout };
+					_wfreopen_s(&fpstdin, L"CONIN$", L"r", stdin);
+					_wfreopen_s(&fpstdout, L"CONOUT$", L"w+t", stdout);
+					_wsetlocale(LC_ALL, L"");
+					symbolResolver.m_consoleAllocated = true;
+				}
 			}
-			if (GetConsoleWindow())
+			if (symbolResolver.m_consoleAllocated)
 			{
 				wprintf_s(L"%s", event->desc);
-				symbolResolver.m_consoleAllocated = true;
 			}
 		}
 
@@ -83,8 +85,9 @@ SymbolResolver::SymbolResolver()
 
 SymbolResolver::~SymbolResolver() noexcept
 {
-	if (m_consoleAllocated)
+	if (m_consoleAllocated && GetConsoleWindow())
 	{
+		fclose(stdin);
 		fclose(stdout);
 		FreeConsole();
 	}

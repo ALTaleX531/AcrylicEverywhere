@@ -212,8 +212,10 @@
     <ClInclude Include="AcrylicBackdrop.hpp" />
     <ClInclude Include="AeroBackdrop.hpp" />
     <ClInclude Include="BlurBackdrop.hpp" />
+    <ClInclude Include="BrightnessEffect.hpp" />
     <ClInclude Include="CanvasGeometry.hpp" />
     <ClInclude Include="ColorConversion.hpp" />
+    <ClInclude Include="ColorMatrixEffect.hpp" />
     <ClInclude Include="CompositedBackdrop.hpp" />
     <ClInclude Include="CrossFadeEffect.hpp" />
     <ClInclude Include="AcrylicEverywhere.hpp" />

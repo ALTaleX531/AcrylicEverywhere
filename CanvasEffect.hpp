@@ -7,7 +7,7 @@ namespace AcrylicEverywhere
 {
 	struct NamedProperty
 	{
-		const wchar_t* Name; // Compile-time constant
+		LPCWSTR Name; // Compile-time constant
 		UINT Index; // Property index
 		using GRAPHICS_EFFECT_PROPERTY_MAPPING = ABI::Windows::Graphics::Effects::GRAPHICS_EFFECT_PROPERTY_MAPPING;
 		GRAPHICS_EFFECT_PROPERTY_MAPPING Mapping;
@@ -148,6 +148,10 @@ namespace AcrylicEverywhere
 		auto BoxValue(UINT32 value)
 		{
 			return winrt::Windows::Foundation::PropertyValue::CreateUInt32(value).as<winrt::Windows::Foundation::IPropertyValue>();
+		}
+		auto BoxValue(const D2D1_MATRIX_5X4_F& value)
+		{
+			return winrt::Windows::Foundation::PropertyValue::CreateSingleArray(value.m[0]).as<winrt::Windows::Foundation::IPropertyValue>();
 		}
 		template <size_t size>
 		auto BoxValue(float(&value)[size])

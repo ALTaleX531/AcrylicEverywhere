@@ -135,6 +135,12 @@
     <ClInclude Include="GlassReflectionBackdrop.hpp">
       <Filter>头文件\Backdrops</Filter>
     </ClInclude>
+    <ClInclude Include="ColorMatrixEffect.hpp">
+      <Filter>头文件\Win2D</Filter>
+    </ClInclude>
+    <ClInclude Include="BrightnessEffect.hpp">
+      <Filter>头文件\Win2D</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="dllmain.cpp">
