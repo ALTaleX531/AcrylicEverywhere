@@ -104,7 +104,7 @@ namespace AcrylicEverywhere
 			colorBalanceEffect->SetExposureAmount(colorBalance / 10.f);
 			colorBalanceEffect->SetInput(*compositeEffect);
 
-			auto effectBrush{ compositor.CreateEffectFactory(*glowBalanceEffect).CreateBrush() };
+			auto effectBrush{ compositor.CreateEffectFactory(*colorBalanceEffect).CreateBrush() };
 			if (hostBackdrop)
 			{
 				effectBrush.SetSourceParameter(L"Backdrop", compositor.CreateHostBackdropBrush());
@@ -118,7 +118,7 @@ namespace AcrylicEverywhere
 		}
 		catch (...) { return nullptr; }
 
-		void STDMETHODCALLTYPE UpdateParameters()
+		void STDMETHODCALLTYPE ReloadParameters()
 		{
 			darkMode_Active_Color = { 255, 116, 184, 252 };
 			darkMode_Inactive_Color = { 255, 116, 184, 252 };
@@ -163,7 +163,7 @@ namespace AcrylicEverywhere
 				interopDCompDevice.copy_from(
 					uDwmPrivates::CDesktopManager::s_pDesktopManagerInstance->GetDCompositionInteropDevice()
 				);
-				UpdateParameters();
+				ReloadParameters();
 				auto compositor{ interopDCompDevice.as<winrt::Windows::UI::Composition::Compositor>() };
 
 				lightMode_Active_Brush = CreateBrush(
@@ -253,7 +253,7 @@ namespace AcrylicEverywhere
 		CATCH_RETURN()
 	};
 
-	struct CAccentAeroResources
+	struct CAccentAeroResources : CDCompResourcesBase
 	{
 
 	};

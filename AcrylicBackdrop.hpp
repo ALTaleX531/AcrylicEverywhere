@@ -310,7 +310,7 @@ namespace AcrylicEverywhere
 		}
 		catch (...) { return nullptr; }
 
-		void STDMETHODCALLTYPE UpdateParameters()
+		void STDMETHODCALLTYPE ReloadParameters()
 		{
 			darkMode_Active_Color = { 255, 44, 44, 44 };
 			darkMode_Inactive_Color = { 255, 44, 44, 44 };
@@ -347,7 +347,7 @@ namespace AcrylicEverywhere
 				interopDCompDevice.copy_from(
 					uDwmPrivates::CDesktopManager::s_pDesktopManagerInstance->GetDCompositionInteropDevice()
 				);
-				UpdateParameters();
+				ReloadParameters();
 				auto compositor{ interopDCompDevice.as<winrt::Windows::UI::Composition::Compositor>() };
 				auto noiceBrush{ CreateNoiceSurfaceBrush(compositor, uDwmPrivates::CDesktopManager::s_pDesktopManagerInstance->GetD2DDevice()) };
 
@@ -430,7 +430,7 @@ namespace AcrylicEverywhere
 		CATCH_RETURN()
 	};
 
-	struct CAccentAcrylicResources
+	struct CAccentAcrylicResources : CDCompResourcesBase
 	{
 		winrt::com_ptr<DCompPrivates::IDCompositionDesktopDevicePartner> interopDCompDevice{ nullptr };
 		winrt::Windows::UI::Composition::CompositionSurfaceBrush noiceBrush{ nullptr };

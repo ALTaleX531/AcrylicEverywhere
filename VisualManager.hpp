@@ -19,8 +19,8 @@ namespace AcrylicEverywhere
 					if (result.second == true) 
 					{ 
 						it = result.first; 
-						it->second->UpdateBackdropType(BackdropType::Aero);
-						it->second->UpdateGlassReflectionState(true);
+						it->second->UpdateBackdropType(BackdropType::Acrylic);
+						it->second->UpdateGlassReflectionState(false);
 					}
 				}
 			}
@@ -39,8 +39,8 @@ namespace AcrylicEverywhere
 					if (result.second == true) 
 					{
 						it = result.first;
-						it->second->UpdateBackdropType(BackdropType::Aero);
-						it->second->UpdateGlassReflectionState(true);
+						it->second->UpdateBackdropType(BackdropType::Acrylic);
+						it->second->UpdateGlassReflectionState(false);
 					}
 				}
 			}
@@ -174,6 +174,7 @@ namespace AcrylicEverywhere
 			m_backdropMap.clear();
 			m_accentBackdropMap.clear();
 			m_animatedBackdropMap.clear();
+			m_animatedAccentBackdropMap.clear();
 		}
 	private:
 		std::unordered_map<uDwmPrivates::CTopLevelWindow*, winrt::com_ptr<CCompositedBackdrop>> m_backdropMap{};

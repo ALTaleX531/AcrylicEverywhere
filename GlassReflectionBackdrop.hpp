@@ -3,7 +3,7 @@
 
 namespace AcrylicEverywhere
 {
-	struct CGlassReflectionResources
+	struct CGlassReflectionResources : CDCompResourcesBase
 	{
 		winrt::com_ptr<DCompPrivates::IDCompositionDesktopDevicePartner> interopDCompDevice{ nullptr };
 		winrt::Windows::UI::Composition::CompositionDrawingSurface drawingSurface{ nullptr };
@@ -199,10 +199,10 @@ namespace AcrylicEverywhere
 				glassSurfaceBrush.Offset(
 					winrt::Windows::Foundation::Numerics::float2
 					{
-						-static_cast<float>(windowRect.left - mi.rcMonitor.left) * (1.f + s_sharedResources.parallaxIntensity) +
+						-static_cast<float>(windowRect.left - mi.rcMonitor.left) * (1.f - s_sharedResources.parallaxIntensity) +
 						//static_cast<float>(IsMaximized(hwnd) ? margins.cxLeftWidth : 0.f) +
 						fixedOffset.x,
-						-static_cast<float>(windowRect.top - mi.rcMonitor.top) * (1.f + s_sharedResources.parallaxIntensity) +
+						-static_cast<float>(windowRect.top - mi.rcMonitor.top) * (1.f - s_sharedResources.parallaxIntensity) +
 						//static_cast<float>(IsMaximized(hwnd) ? margins.cyTopHeight : 0.f) +
 						fixedOffset.y
 					}

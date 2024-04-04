@@ -482,6 +482,15 @@ namespace AcrylicEverywhere::uDwmPrivates
 
 			return accentPolicy;
 		}
+		DWORD GetSystemBackdropType() const
+		{
+			if (SystemHelper::g_buildNumber >= 22000)
+			{
+				return reinterpret_cast<DWORD const*>(this)[204];
+			}
+
+			return 0;
+		}
 		bool IsUsingDarkMode() const
 		{
 			bool darkMode{ false };
@@ -994,6 +1003,25 @@ namespace AcrylicEverywhere::uDwmPrivates
 			}
 
 			return systemBackdropApplied;
+		}
+		DWORD GetBackgroundType()
+		{
+			DWORD backgroundType{ 0 };
+
+			if (SystemHelper::g_buildNumber < 22000)
+			{
+				backgroundType = 0;
+			}
+			else if (SystemHelper::g_buildNumber < 26020)
+			{
+				backgroundType = reinterpret_cast<DWORD const*>(this)[210];
+			}
+			else
+			{
+				backgroundType = reinterpret_cast<DWORD const*>(this)[200];
+			}
+
+			return backgroundType;
 		}
 	};
 	struct CSecondaryWindowRepresentation

@@ -66,7 +66,7 @@ namespace AcrylicEverywhere
 		}
 		catch (...) { return nullptr; }
 
-		void STDMETHODCALLTYPE UpdateParameters()
+		void STDMETHODCALLTYPE ReloadParameters()
 		{
 			darkMode_Active_Color = { 255, 32, 32, 32 };
 			darkMode_Inactive_Color = { 255, 32, 32, 32 };
@@ -103,7 +103,7 @@ namespace AcrylicEverywhere
 				interopDCompDevice.copy_from(
 					uDwmPrivates::CDesktopManager::s_pDesktopManagerInstance->GetDCompositionInteropDevice()
 				);
-				UpdateParameters();
+				ReloadParameters();
 				auto compositor{ interopDCompDevice.as<winrt::Windows::UI::Composition::Compositor>() };
 
 				lightMode_Active_Brush = CreateBrush(

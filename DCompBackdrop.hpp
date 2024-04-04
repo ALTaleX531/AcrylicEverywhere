@@ -5,7 +5,11 @@
 
 namespace AcrylicEverywhere
 {
-	struct CDCompResources
+	struct CDCompResourcesBase
+	{
+		virtual void ReloadParameters() {}
+	};
+	struct CDCompResources : CDCompResourcesBase
 	{
 		winrt::com_ptr<DCompPrivates::IDCompositionDesktopDevicePartner> interopDCompDevice{ nullptr };
 		winrt::Windows::UI::Composition::CompositionBrush lightMode_Active_Brush{ nullptr };
