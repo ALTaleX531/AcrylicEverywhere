@@ -151,7 +151,7 @@ namespace AcrylicEverywhere
 		}
 		auto BoxValue(const D2D1_MATRIX_5X4_F& value)
 		{
-			return winrt::Windows::Foundation::PropertyValue::CreateSingleArray(value.m[0]).as<winrt::Windows::Foundation::IPropertyValue>();
+			return winrt::Windows::Foundation::PropertyValue::CreateSingleArray({ reinterpret_cast<const float*>(&value), sizeof(value) / sizeof(float) }).as<winrt::Windows::Foundation::IPropertyValue>();
 		}
 		template <size_t size>
 		auto BoxValue(float(&value)[size])

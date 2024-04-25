@@ -591,9 +591,9 @@ DWORD WINAPI AcrylicEverywhere::ThreadProc(PVOID parameter)
 		HookHelper::Detours::Attach(&g_CTopLevelWindow_Destructor_Org, HookHelper::union_cast<PVOID>(&MyCTopLevelWindow::Destructor));
 		HookHelper::Detours::Attach(&g_ResourceHelper_CreateGeometryFromHRGN_Org, HookHelper::union_cast<PVOID>(&MyResourceHelper::CreateGeometryFromHRGN));
 
-		HookHelper::Detours::Attach(&g_CTopLevelWindow3D_EnsureRenderData_Org, HookHelper::union_cast<PVOID>(&MyCTopLevelWindow3D::EnsureRenderData));
+		/*HookHelper::Detours::Attach(&g_CTopLevelWindow3D_EnsureRenderData_Org, HookHelper::union_cast<PVOID>(&MyCTopLevelWindow3D::EnsureRenderData));
 		HookHelper::Detours::Attach(&g_CSecondaryWindowRepresentation_CreateCVIForAnimation_Org, HookHelper::union_cast<PVOID>(&MyCSecondaryWindowRepresentation::CreateCVIForAnimation));
-		HookHelper::Detours::Attach(&g_CSecondaryWindowRepresentation_Destructor_Org, HookHelper::union_cast<PVOID>(&MyCSecondaryWindowRepresentation::Destructor));
+		HookHelper::Detours::Attach(&g_CSecondaryWindowRepresentation_Destructor_Org, HookHelper::union_cast<PVOID>(&MyCSecondaryWindowRepresentation::Destructor));*/
 	});
 	// WM_THEMECHANGED dwm will reload the whole theme
 	// WM_WININICHANGE dwm refresh part of the settings
@@ -652,9 +652,9 @@ void AcrylicEverywhere::Shutdown()
 		HookHelper::Detours::Detach(&g_CTopLevelWindow_Destructor_Org, HookHelper::union_cast<PVOID>(&MyCTopLevelWindow::Destructor));
 		HookHelper::Detours::Detach(&g_ResourceHelper_CreateGeometryFromHRGN_Org, HookHelper::union_cast<PVOID>(&MyResourceHelper::CreateGeometryFromHRGN));
 
-		HookHelper::Detours::Detach(&g_CTopLevelWindow3D_EnsureRenderData_Org, HookHelper::union_cast<PVOID>(&MyCTopLevelWindow3D::EnsureRenderData));
+		/*HookHelper::Detours::Detach(&g_CTopLevelWindow3D_EnsureRenderData_Org, HookHelper::union_cast<PVOID>(&MyCTopLevelWindow3D::EnsureRenderData));
 		HookHelper::Detours::Detach(&g_CSecondaryWindowRepresentation_CreateCVIForAnimation_Org, HookHelper::union_cast<PVOID>(&MyCSecondaryWindowRepresentation::CreateCVIForAnimation));
-		HookHelper::Detours::Detach(&g_CSecondaryWindowRepresentation_Destructor_Org, HookHelper::union_cast<PVOID>(&MyCSecondaryWindowRepresentation::Destructor));
+		HookHelper::Detours::Detach(&g_CSecondaryWindowRepresentation_Destructor_Org, HookHelper::union_cast<PVOID>(&MyCSecondaryWindowRepresentation::Destructor));*/
 	});
 	g_visualManager.Shutdown();
 

@@ -239,6 +239,7 @@
     <ClInclude Include="SymbolResolver.hpp" />
     <ClInclude Include="SystemHelper.hpp" />
     <ClInclude Include="ThemeHelper.hpp" />
+    <ClInclude Include="TintEffect.hpp" />
     <ClInclude Include="uDwmBackdrop.hpp" />
     <ClInclude Include="uDwmPrivates.hpp" />
     <ClInclude Include="VisualManager.hpp" />

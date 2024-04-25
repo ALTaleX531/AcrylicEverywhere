@@ -19,8 +19,8 @@ namespace AcrylicEverywhere
 					if (result.second == true) 
 					{ 
 						it = result.first; 
-						it->second->UpdateBackdropType(BackdropType::Acrylic);
-						it->second->UpdateGlassReflectionState(false);
+						it->second->UpdateBackdropType(BackdropType::Aero);
+						it->second->UpdateGlassReflectionState(true);
 					}
 				}
 			}
@@ -39,8 +39,8 @@ namespace AcrylicEverywhere
 					if (result.second == true) 
 					{
 						it = result.first;
-						it->second->UpdateBackdropType(BackdropType::Acrylic);
-						it->second->UpdateGlassReflectionState(false);
+						it->second->UpdateBackdropType(BackdropType::Aero);
+						it->second->UpdateGlassReflectionState(true);
 					}
 				}
 			}

@@ -141,6 +141,9 @@
     <ClInclude Include="BrightnessEffect.hpp">
       <Filter>头文件\Win2D</Filter>
     </ClInclude>
+    <ClInclude Include="TintEffect.hpp">
+      <Filter>头文件\Win2D</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="dllmain.cpp">

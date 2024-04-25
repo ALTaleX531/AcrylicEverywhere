@@ -14,13 +14,11 @@ BOOL APIENTRY DllMain(
         {
             DisableThreadLibraryCalls(hModule);
             AcrylicEverywhere::Startup();
-            AllocConsole();
             break;
         }
         case DLL_PROCESS_DETACH:
         {
             AcrylicEverywhere::Shutdown();
-            FreeConsole();
             break;
         }
     }

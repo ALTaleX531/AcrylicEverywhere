@@ -7,6 +7,9 @@
 #include "BlendEffect.hpp"
 #include "ExposureEffect.hpp"
 #include "CompositeEffect.hpp"
+#include "SaturationEffect.hpp"
+#include "BrightnessEffect.hpp"
+#include "TintEffect.hpp"
 
 namespace AcrylicEverywhere
 {
@@ -44,8 +47,19 @@ namespace AcrylicEverywhere
 			bool hostBackdrop
 		) try
 		{
-			// New Aero backdrop recipe by @ALTaleX531 (https://github.com/ALTaleX531/AcrylicEverywhere), @aubymori (normal layer fixes)
-			// @kfh83 for porting to DWMBlurGlass and minor modifications
+			// the current recipe is modified from @kfh83, @TorutheRedFox, @aubymori
+			auto fallbackTintSource{ winrt::make_self<ColorSourceEffect>() };
+			fallbackTintSource->SetColor(winrt::Windows::UI::Color
+			{ 
+				255, 
+				static_cast<UCHAR>(min(blurBalance + 0.1f, 1.f) * 255.f),
+				static_cast<UCHAR>(min(blurBalance + 0.1f, 1.f) * 255.f),
+				static_cast<UCHAR>(min(blurBalance + 0.1f, 1.f) * 255.f),
+			});
+
+			auto blackOrTransparentSource{ winrt::make_self<TintEffect>() };
+			blackOrTransparentSource->SetInput(winrt::Windows::UI::Composition::CompositionEffectSourceParameter{ L"Backdrop" });
+			blackOrTransparentSource->SetColor(D2D1::ColorF(D2D1::ColorF::Black));
 
 			auto colorEffect{ winrt::make_self<ColorSourceEffect>() };
 			colorEffect->SetName(L"MainColor");
@@ -56,63 +70,55 @@ namespace AcrylicEverywhere
 			colorOpacityEffect->SetInput(*colorEffect);
 			colorOpacityEffect->SetOpacity(colorBalance);
 
-			auto glowColorEffect{ winrt::make_self<ColorSourceEffect>() };
-			glowColorEffect->SetName(L"GlowColor");
-			glowColorEffect->SetColor(glowColor);
+			auto gaussianBlurEffect{ winrt::make_self<GaussianBlurEffect>() };
+			gaussianBlurEffect->SetName(L"Blur");
+			gaussianBlurEffect->SetBorderMode(D2D1_BORDER_MODE_HARD);
+			gaussianBlurEffect->SetBlurAmount(blurAmount);
+			gaussianBlurEffect->SetInput(winrt::Windows::UI::Composition::CompositionEffectSourceParameter{ L"Backdrop" });
 
-			auto glowOpacityEffect{ winrt::make_self<OpacityEffect>() };
-			glowOpacityEffect->SetName(L"GlowColorOpacity");
-			glowOpacityEffect->SetInput(*glowColorEffect);
-			glowOpacityEffect->SetOpacity(glowBalance);
-
-			auto blurredBackdropBalanceEffect{ winrt::make_self<ExposureEffect>() };
+			auto blurredBackdropBalanceEffect{ winrt::make_self<OpacityEffect>() };
 			blurredBackdropBalanceEffect->SetName(L"BlurBalance");
-			blurredBackdropBalanceEffect->SetExposureAmount(blurBalance);
+			blurredBackdropBalanceEffect->SetOpacity(blurBalance);
+			blurredBackdropBalanceEffect->SetInput(*gaussianBlurEffect);
 
-			if (hostBackdrop)
-			{
-				blurredBackdropBalanceEffect->SetInput(winrt::Windows::UI::Composition::CompositionEffectSourceParameter{ L"Backdrop" });
-			}
-			else
-			{
-				auto gaussianBlurEffect{ winrt::make_self<GaussianBlurEffect>() };
-				gaussianBlurEffect->SetName(L"Blur");
-				gaussianBlurEffect->SetBorderMode(D2D1_BORDER_MODE_HARD);
-				gaussianBlurEffect->SetBlurAmount(blurAmount);
-				gaussianBlurEffect->SetInput(winrt::Windows::UI::Composition::CompositionEffectSourceParameter{ L"Backdrop" });
-				blurredBackdropBalanceEffect->SetInput(*gaussianBlurEffect);
-			}
+			auto actualBackdropEffect{ winrt::make_self<CompositeStepEffect>() };
+			actualBackdropEffect->SetCompositeMode(D2D1_COMPOSITE_MODE_PLUS);
+			actualBackdropEffect->SetDestination(*blackOrTransparentSource);
+			actualBackdropEffect->SetSource(*blurredBackdropBalanceEffect);
 
-			auto glowBlendEffect{ winrt::make_self<BlendEffect>() };
-			glowBlendEffect->SetBlendMode(D2D1_BLEND_MODE_MULTIPLY);
-			glowBlendEffect->SetBackground(*blurredBackdropBalanceEffect);
-			glowBlendEffect->SetForeground(*glowOpacityEffect);
+			auto gaussianBlurEffect2{ winrt::make_self<GaussianBlurEffect>() };
+			gaussianBlurEffect2->SetBorderMode(D2D1_BORDER_MODE_HARD);
+			gaussianBlurEffect2->SetBlurAmount(blurAmount);
+			gaussianBlurEffect2->SetInput(winrt::Windows::UI::Composition::CompositionEffectSourceParameter{ L"Backdrop" });
 
-			auto glowBalanceEffect{ winrt::make_self<ExposureEffect>() };
-			glowBalanceEffect->SetName(L"GlowBalance");
-			glowBalanceEffect->SetExposureAmount(glowBalance / 10.f);
-			glowBalanceEffect->SetInput(*glowBlendEffect);
+			auto desaturatedBlurredBackdrop{ winrt::make_self<SaturationEffect>() };
+			desaturatedBlurredBackdrop->SetSaturation(0.f);
+			desaturatedBlurredBackdrop->SetInput(*gaussianBlurEffect2);
+
+			// make animation feel better...
+			auto backdropNotTransparentPromised{ winrt::make_self<CompositeStepEffect>() };
+			backdropNotTransparentPromised->SetCompositeMode(D2D1_COMPOSITE_MODE_SOURCE_OVER);
+			backdropNotTransparentPromised->SetDestination(*fallbackTintSource);
+			backdropNotTransparentPromised->SetSource(*desaturatedBlurredBackdrop);
+
+			// if the glowColor is black, then it will produce a completely transparent surface
+			auto tintEffect{ winrt::make_self<TintEffect>() };
+			tintEffect->SetInput(*backdropNotTransparentPromised);
+			tintEffect->SetColor(winrt::Windows::UI::Color{ static_cast<UCHAR>(static_cast<float>(glowColor.A) * glowBalance), glowColor.R, glowColor.G, glowColor.B});
+
+			auto backdropWithAfterGlow{ winrt::make_self<CompositeStepEffect>() };
+			backdropWithAfterGlow->SetCompositeMode(D2D1_COMPOSITE_MODE_PLUS);
+			backdropWithAfterGlow->SetDestination(*actualBackdropEffect);
+			backdropWithAfterGlow->SetSource(*tintEffect);
 
 			auto compositeEffect{ winrt::make_self<CompositeStepEffect>() };
-			compositeEffect->SetCompositeMode(D2D1_COMPOSITE_MODE_SOURCE_OVER);
-			compositeEffect->SetName(L"Composite");
-			compositeEffect->SetDestination(*glowBalanceEffect);
+			compositeEffect->SetCompositeMode(D2D1_COMPOSITE_MODE_PLUS);
+			compositeEffect->SetDestination(*backdropWithAfterGlow);
 			compositeEffect->SetSource(*colorOpacityEffect);
 
-			auto colorBalanceEffect{ winrt::make_self<ExposureEffect>() };
-			colorBalanceEffect->SetName(L"ColorBalance");
-			colorBalanceEffect->SetExposureAmount(colorBalance / 10.f);
-			colorBalanceEffect->SetInput(*compositeEffect);
 
-			auto effectBrush{ compositor.CreateEffectFactory(*colorBalanceEffect).CreateBrush() };
-			if (hostBackdrop)
-			{
-				effectBrush.SetSourceParameter(L"Backdrop", compositor.CreateHostBackdropBrush());
-			}
-			else
-			{
-				effectBrush.SetSourceParameter(L"Backdrop", compositor.CreateBackdropBrush());
-			}
+			auto effectBrush{ compositor.CreateEffectFactory(*compositeEffect).CreateBrush() };
+			effectBrush.SetSourceParameter(L"Backdrop", compositor.CreateBackdropBrush());
 
 			return effectBrush;
 		}
@@ -130,18 +136,18 @@ namespace AcrylicEverywhere
 			lightMode_Active_GlowColor = { 255, 116, 184, 252 };
 			lightMode_Inactive_GlowColor = { 255, 116, 184, 252 };
 
-			lightMode_Active_ColorBalance = 0.08f;
-			lightMode_Inactive_ColorBalance = 0.032f;
-			darkMode_Active_ColorBalance = 0.08f;
-			darkMode_Inactive_ColorBalance = 0.032f;
+			lightMode_Active_ColorBalance = 0.f; // originally the color balance is zero
+			lightMode_Inactive_ColorBalance = 0.f;
+			darkMode_Active_ColorBalance = 0.f;
+			darkMode_Inactive_ColorBalance = 0.f;
 
 			lightMode_Active_GlowBalance = 0.43f;
 			lightMode_Inactive_GlowBalance = 0.43f;
 			darkMode_Active_GlowBalance = 0.43f;
 			darkMode_Inactive_GlowBalance = 0.43f;
 
-			Active_BlurBalance = -0.125f;
-			Inactive_BlurBalance = 0.365f;
+			Active_BlurBalance = 0.49f;
+			Inactive_BlurBalance = 0.796f; // y = 0.4 * x + 0.6
 		}
 		winrt::Windows::UI::Composition::CompositionBrush STDMETHODCALLTYPE GetBrush(bool useDarkMode, bool windowActivated) override try
 		{
