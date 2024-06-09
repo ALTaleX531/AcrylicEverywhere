@@ -1,4 +1,7 @@
 # AcrylicEverywhere
+> [!IMPORTANT]  
+> The repository is no longer maintained and I will continue my work on [OpenGlass](https://github.com/ALTaleX531/OpenGlass).
+
 Upstream implementation of the [DWMBlurGlass](https://github.com/Maplespe/DWMBlurGlass) custom blur method.  
   
 In theory, the custom blur method is supported as low as Windows 10 1607, but it requires a lot of work, and the current code for the project supports as low as Windows 10 2004.   
